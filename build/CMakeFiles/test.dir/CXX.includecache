@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/Dummy.hh
+iostream
+-
+
+/home/ikuehne/hamt/test/test.cpp
+Dummy.hh
+/home/ikuehne/hamt/test/Dummy.hh
+

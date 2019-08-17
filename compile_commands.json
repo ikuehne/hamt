@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/ikuehne/hamt/build",
+  "command": "/usr/bin/c++   -I/home/ikuehne/hamt/include    -o CMakeFiles/test.dir/test/test.cpp.o -c /home/ikuehne/hamt/test/test.cpp",
+  "file": "/home/ikuehne/hamt/test/test.cpp"
+}
+]
