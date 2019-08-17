@@ -1,3 +1,0 @@
-/home/ikuehne/hamt/build/CMakeFiles/rebuild_cache.dir
-/home/ikuehne/hamt/build/CMakeFiles/test.dir
-/home/ikuehne/hamt/build/CMakeFiles/edit_cache.dir

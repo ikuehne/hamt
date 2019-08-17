@@ -18,6 +18,8 @@ def wrapCommand(cmd):
         exit(ret)
 
 def main():
+    if not os.path.exists("build"):
+        os.mkdir("build")
     os.chdir("build")
     # -DCMAKE_EXPORT... tells cmake to generate a clang compilation database for
     # tooling.
