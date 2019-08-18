@@ -66,7 +66,7 @@ public:
         return reinterpret_cast<Leaf *>(ptr & (~1));
     }
 
-    inline Leaf *lookup(uint64_t hash);
+    bool lookup(uint64_t hash, std::string *str);
 
 private:
     uintptr_t ptr;
@@ -107,15 +107,15 @@ public:
     // Return one of three things:
     //    - A NULL pointer indicating the key was not present.
     //    - A 
-    Leaf *lookup(uint64_t hash) {
+    bool lookup(uint64_t hash, std::string *str) {
         auto thisNodeKey = hash & FIRST_N_BITS;
         bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
 
         if (!hasChild) {
-            return NULL;
+            return false;
         }
 
-        return children[getIndex(thisNodeKey) - 1].lookup(hash >> 6);
+        return children[getIndex(thisNodeKey) - 1].lookup(hash >> 6, str);
     }
 
     void insert(uint64_t hash, std::string *str) {
@@ -211,7 +211,7 @@ private:
 
 class TopLevelHamtNode {
 public:
-    void insert(uint64_t hash, std::string *str) {
+    inline void insert(uint64_t hash, std::string *str) {
         std::uint64_t thisNodeKey = hash & FIRST_N_BITS;
         auto nextNode = &table[thisNodeKey];
 
@@ -236,8 +236,8 @@ public:
         }
     }
 
-    inline Leaf *lookup(uint64_t hash) {
-        return table[hash & FIRST_N_BITS].lookup(hash >> 6);
+    inline bool lookup(uint64_t hash, std::string *str) {
+        return table[hash & FIRST_N_BITS].lookup(hash >> 6, str);
     }
 
 private:
@@ -255,13 +255,7 @@ public:
 
     bool lookup(std::string *str) {
         std::uint64_t hash = hasher(*str);
-        Leaf *leaf = root.lookup(hash);
-        if (leaf == NULL) return false;
-
-        for (const auto *i: leaf->getData()) {
-            if (i->compare(*str) == 0) return true;
-        }
-        return false;
+        return root.lookup(hash, str);
     }
 private:
     TopLevelHamtNode root;
@@ -278,13 +272,19 @@ HamtNodePointer::~HamtNodePointer() {
     }
 }
 
-inline Leaf *HamtNodePointer::lookup(uint64_t hash) {
+inline bool HamtNodePointer::lookup(uint64_t hash, std::string *str) {
     if (isNull()) {
-        return NULL;
+        return false;
     } else if (isChild()) {
-        return getChild()->lookup(hash);
+        return getChild()->lookup(hash, str);
     } else {
-        return getLeaf();
+        Leaf *leaf = getLeaf();
+
+        for (const auto *i: leaf->getData()) {
+            if (*i == *str) return true;
+        }
+
+        return false;
     }
 }
 
