@@ -96,8 +96,10 @@ public:
         int idx = __builtin_popcountll((unsigned long long)rest) - 1;
         HamtNodePointer next = children[idx];
         if (next.isChild()) {
+            assert(!next.isNull());
             return next.getChild()->lookup(hash >> 6);
         } else {
+            assert(next.getLeaf()->getHash() == hash);
             return next.getLeaf();
         }
     }
@@ -106,10 +108,16 @@ public:
         auto thisNodeKey = hash & FIRST_6_BITS;
         bool hasChild = map & (1ULL << thisNodeKey);
         std::uint64_t rest = map >> thisNodeKey;
+        // idx is the number of set bits *higher* than the bit we just
+        // checked (we'll adjust it in a second if this line counted the bit
+        // we just checked).
         int idx = __builtin_popcountll((unsigned long long)rest);
 
         if (hasChild) {
+            // We counted the bit for our child--subtract that out.
+            idx -= 1;
             HamtNodePointer next = children[idx].getChild();
+            assert(!next.isNull());
             if (next.isChild()) {
                 next.getChild()->insert(hash >> 6, str);
             } else {
@@ -137,11 +145,12 @@ public:
 private:
     void insertLeaf(uint64_t hash, Leaf *leaf) {
         auto thisNodeKey = hash & FIRST_6_BITS;
-        bool hasChild = map & (1 << thisNodeKey);
+        bool hasChild = map & (1ULL << thisNodeKey);
         std::uint64_t rest = map >> thisNodeKey;
         int idx = __builtin_popcountll((unsigned long long)rest);
 
         if (hasChild) {
+            idx -= 1;
             HamtNodePointer next = children[idx].getChild();
             if (next.isChild()) {
                 return next.getChild()->insertLeaf(hash >> 6, leaf);
@@ -155,7 +164,7 @@ private:
             }
         } else {
             // We need to add a new child. Set the bit in the map:
-            map |= (1 << thisNodeKey);
+            map |= (1ULL << thisNodeKey);
             leaf->setHash(hash);
             // And stick it in its expected position.
             children.insert(children.begin() + idx, HamtNodePointer(leaf));
@@ -168,6 +177,10 @@ private:
     // shift by 1 to get `0110`, then count bits. To get it for 2, we right
     // shift by 3 to get `0001`, then count bits.
     std::uint64_t map;
+
+    // Sorted from high to low bits. So if the first six bits of a key are the
+    // *highest* of the keys stored at this node, it will be *first* in this
+    // vector.
     std::vector<HamtNodePointer> children;
 };
 
@@ -186,13 +199,9 @@ public:
         if (leaf == NULL) return false;
 
         for (const auto *i: leaf->getData()) {
-            if (*i == *str) {
-                return true;
-            } else {
-                return false;
-            }
+            if (i->compare(*str) == 0) return true;
         }
-        assert(false);
+        return false;
     }
 private:
     HamtNode *root;

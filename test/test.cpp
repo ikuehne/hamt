@@ -1,4 +1,7 @@
+#include <algorithm>
 #include <iostream>
+#include <random>
+#include <unordered_set>
 
 #include "HAMT.hh"
 
@@ -7,35 +10,57 @@ void die() {
     exit(1);
 }
 
+static auto generator = std::mt19937();
+
+std::string *random_string()
+{
+    int length = generator() % 256;
+    auto str = new std::string(length,0);
+
+    std::generate_n(str->begin(), length, generator);
+
+    return str;
+}
+
 int main(void) {
-    std::string test1 = "hello";
-    std::string test2 = "hell";
-    std::string test3 = "hellggjrkdn";
-    std::string test4 = "garbrudzken";
-    std::string test5 = "";
+    std::unordered_set<std::string> setOfStringsToAdd;
+    std::vector<std::string *> stringsToAdd;
+
+    for (int i = 0; i < 2; ++i) {
+        auto str = random_string();
+        stringsToAdd.push_back(str);
+        setOfStringsToAdd.insert(*str);
+    }
+
+    std::vector<std::string*> stringsNotToAdd;
+
+    for (int i = 0; i < 20000; ++i) {
+        auto str = random_string();
+        if (setOfStringsToAdd.find(*str) != setOfStringsToAdd.end()) {
+            continue;
+        }
+        stringsNotToAdd.push_back(str);
+    }
 
     Hamt hamt;
 
-    hamt.insert(&test1);
-    hamt.insert(&test2);
-    hamt.insert(&test3);
-    hamt.insert(&test4);
-    hamt.insert(&test5);
+    int i = 0;
+    for (auto str: stringsToAdd) {
+        i += 1;
+        hamt.insert(str);
+    }
 
-    std::string test6 = "hello";
+    i = 0;
+    for (auto str: stringsToAdd) {
+        i += 1;
+        if (!hamt.lookup(str)) die();
+    }
 
-    if (!hamt.lookup(&test1)) die();
-    if (!hamt.lookup(&test2)) die();
-    if (!hamt.lookup(&test3)) die();
-    if (!hamt.lookup(&test4)) die();
-    if (!hamt.lookup(&test5)) die();
-    if (!hamt.lookup(&test6)) die();
-
-    std::string test7 = "ajklde";
-
-    if (hamt.lookup(&test7)) die();
-
-    std::cerr << "Test succeeded!\n";
+    i = 0;
+    for (auto str: stringsNotToAdd) {
+        i += 1;
+        if (hamt.lookup(str)) die();
+    }
 
     return 0;
 }
