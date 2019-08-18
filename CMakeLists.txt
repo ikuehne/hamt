@@ -5,7 +5,7 @@ project(hamt)
 include_directories(include)
 
 add_executable(test test/test.cpp)
-add_executable(bench test/bench.cpp)
+add_executable(bench bench/bench.cpp)
 
 add_compile_options(
     "-Wall" "-Wpedantic" "-Wextra" "-fexceptions", "Werror"

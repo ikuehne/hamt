@@ -29,6 +29,7 @@ def main():
 
     wrapCommand(["make"])
     wrapCommand(["./test"])
+    wrapCommand(["valgrind", "./test"])
 
 if __name__ == "__main__":
     main()
