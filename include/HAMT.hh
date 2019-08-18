@@ -66,6 +66,8 @@ public:
         return reinterpret_cast<Leaf *>(ptr & (~1));
     }
 
+    inline Leaf *lookup(uint64_t hash);
+
 private:
     uintptr_t ptr;
 };
@@ -106,32 +108,14 @@ public:
     //    - A NULL pointer indicating the key was not present.
     //    - A 
     Leaf *lookup(uint64_t hash) {
-        HamtNode *currentNode = this;
+        auto thisNodeKey = hash & FIRST_N_BITS;
+        bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
 
-        while (true) {
-            auto thisNodeKey = hash & FIRST_N_BITS;
-            auto map = currentNode->map;
-            bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
-
-            if (!hasChild) {
-                return NULL;
-            }
-
-            // thisNodeKey has BITS_PER_LEVEL bits, which is less than
-            // log(64), so this can't shift off all of map.  However, it does
-            // keep the bit that we just found, so we have to subtract 1 from
-            // the count of set bits.
-            std::uint64_t rest = map >> thisNodeKey;
-            int idx = __builtin_popcountll((unsigned long long)rest) - 1;
-            HamtNodePointer &next = currentNode->children[idx];
-            if (next.isChild()) {
-                assert(!next.isNull());
-                currentNode = next.getChild();
-                hash >>= 6;
-            } else {
-                return next.getLeaf();
-            }
+        if (!hasChild) {
+            return NULL;
         }
+
+        return children[getIndex(thisNodeKey) - 1].lookup(hash >> 6);
     }
 
     void insert(uint64_t hash, std::string *str) {
@@ -252,22 +236,8 @@ public:
         }
     }
 
-    Leaf *lookup(uint64_t hash) {
-        auto thisNodeKey = hash & FIRST_N_BITS;
-        auto nextNode = &table[thisNodeKey];
-
-        // thisNodeKey has BITS_PER_LEVEL bits, which is less than
-        // log(64), so this can't shift off all of map.  However, it does
-        // keep the bit that we just found, so we have to subtract 1 from
-        // the count of set bits.
-        if (nextNode->isNull()) {
-            return NULL;
-        } else if (nextNode->isChild()) {
-            assert(!nextNode->isNull());
-            return nextNode->getChild()->lookup(hash >> 6);
-        } else {
-            return nextNode->getLeaf();
-        }
+    inline Leaf *lookup(uint64_t hash) {
+        return table[hash & FIRST_N_BITS].lookup(hash >> 6);
     }
 
 private:
@@ -307,3 +277,14 @@ HamtNodePointer::~HamtNodePointer() {
         delete getLeaf();
     }
 }
+
+inline Leaf *HamtNodePointer::lookup(uint64_t hash) {
+    if (isNull()) {
+        return NULL;
+    } else if (isChild()) {
+        return getChild()->lookup(hash);
+    } else {
+        return getLeaf();
+    }
+}
+
