@@ -4,6 +4,15 @@
 #include <string>
 #include <vector>
 
+// We do some sketchy memory stuff that GCC doesn't like. Disable that
+// warning.
+#ifdef __GNUC__
+#ifndef __clang__
+    #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
+#endif
+
+
 // The number of bits we use to index into each level of the trie.
 static const std::uint64_t BITS_PER_LEVEL = 6;
 
@@ -71,6 +80,13 @@ class HamtNode {
 public:
     HamtNode();
 
+    // Don't use new and delete for these; they are too special.
+    //
+    // We exclusively use `malloc` and `realloc`, because of the
+    // variable-length `children` member
+    void operator delete(void *p) = delete;
+    void *operator new(size_t size) = delete;
+
     // Look up `hash` in this trie.
     //
     // Return one of three things:
@@ -108,12 +124,11 @@ public:
 
     inline std::uint64_t getIndex(std::uint64_t firstBits);
 
-    inline std::uint64_t numberOfChildren();
+    inline int numberOfChildren();
 
 private:
     inline std::vector<HamtNodeEntry>::iterator
             findChildForInsert(uint64_t hash);
-
 };
 
 class TopLevelHamtNode {
@@ -185,7 +200,15 @@ HamtNodeEntry::~HamtNodeEntry() {
     if (isNull()) {
         return;
     } else if (isChild()) {
-        delete getChild();
+        // This gets a bit tricky. We need to free the tree rooted at this
+        // node, but we can't call `delete` because we allocated this child
+        // with `malloc`. So...
+        HamtNode *child = getChild();
+        int nChildren = child->numberOfChildren();
+        for (int i = 0; i < nChildren; ++i) {
+            child->children[i].~HamtNodeEntry();
+        }
+        free(getChild());
     } else {
         delete getLeaf();
     }
@@ -208,7 +231,7 @@ inline std::uint64_t HamtNode::getIndex(std::uint64_t firstBits) {
     return __builtin_popcountll((unsigned long long)rest);
 }
 
-inline std::uint64_t HamtNode::numberOfChildren() {
+inline int HamtNode::numberOfChildren() {
     return __builtin_popcountll((unsigned long long)map);
 }
 
@@ -373,3 +396,11 @@ bool Hamt::lookup(std::string *str) {
     std::uint64_t hash = hasher(*str);
     return root.lookup(hash, str);
 }
+
+// Re-enable the warning we disabled at the start.
+// warning.
+#ifdef __GNUC__
+#ifndef __clang__
+    #pragma GCC diagnostic warning "-Wclass-memaccess"
+#endif
+#endif
