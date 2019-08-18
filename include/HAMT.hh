@@ -12,11 +12,11 @@ static const std::uint64_t FIRST_6_BITS = (1 << 6) - 1;
 // to a child node or a result.
 class HamtNodePointer {
 public:
-    HamtNodePointer(HamtNode *node)
+    explicit HamtNodePointer(HamtNode *node)
         : ptr(reinterpret_cast<std::uintptr_t>(node))
     {}
 
-    HamtNodePointer(void *data)
+    explicit HamtNodePointer(void *data)
         : ptr(reinterpret_cast<std::uintptr_t>(data) | 1)
     {}
 
@@ -62,7 +62,7 @@ public:
         return data;
     }
 
-    Leaf(std::uint64_t hash): hash(hash), data() {}
+    explicit Leaf(std::uint64_t hash): hash(hash), data() {}
 
 private:
     // The hash, shifted to reflect the level this leaf is at.
@@ -99,7 +99,6 @@ public:
             assert(!next.isNull());
             return next.getChild()->lookup(hash >> 6);
         } else {
-            assert(next.getLeaf()->getHash() == hash);
             return next.getLeaf();
         }
     }
@@ -116,7 +115,7 @@ public:
         if (hasChild) {
             // We counted the bit for our child--subtract that out.
             idx -= 1;
-            HamtNodePointer next = children[idx].getChild();
+            HamtNodePointer &next = children[idx];
             assert(!next.isNull());
             if (next.isChild()) {
                 next.getChild()->insert(hash >> 6, str);
@@ -125,11 +124,13 @@ public:
                 std::uint64_t otherHash = oldLeaf->getHash();
                 if (otherHash == hash) {
                     oldLeaf->getData().push_back(str);
+                } else {
+                    assert((otherHash & FIRST_6_BITS) == thisNodeKey);
+                    HamtNode *newNode = new HamtNode();
+                    next.setChild(newNode);
+                    newNode->insertLeaf(otherHash >> 6, oldLeaf);
+                    newNode->insert(hash >> 6, str);
                 }
-                HamtNode *newNode = new HamtNode();
-                next.setChild(newNode);
-                newNode->insertLeaf(otherHash >> 6, oldLeaf);
-                newNode->insert(hash >> 6, str);
             }
         } else {
             // We need to add a new child. Set the bit in the map:
@@ -151,7 +152,7 @@ private:
 
         if (hasChild) {
             idx -= 1;
-            HamtNodePointer next = children[idx].getChild();
+            HamtNodePointer &next = children[idx];
             if (next.isChild()) {
                 return next.getChild()->insertLeaf(hash >> 6, leaf);
             } else {

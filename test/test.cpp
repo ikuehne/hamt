@@ -26,7 +26,7 @@ int main(void) {
     std::unordered_set<std::string> setOfStringsToAdd;
     std::vector<std::string *> stringsToAdd;
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 20000; ++i) {
         auto str = random_string();
         stringsToAdd.push_back(str);
         setOfStringsToAdd.insert(*str);
