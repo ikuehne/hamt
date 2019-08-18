@@ -66,6 +66,10 @@ public:
         return reinterpret_cast<Leaf *>(ptr & (~1));
     }
 
+    void insert(uint64_t hash, std::string *str);
+
+    void insertLeaf(uint64_t hash, Leaf *leaf);
+
     bool lookup(uint64_t hash, std::string *str);
 
 private:
@@ -115,60 +119,15 @@ public:
             return false;
         }
 
-        return children[getIndex(thisNodeKey) - 1].lookup(hash >> 6, str);
+        return children[getIndex(thisNodeKey) - 1].lookup(hash, str);
     }
 
     void insert(uint64_t hash, std::string *str) {
-        auto nextNode = findChildForInsert(hash);
-
-        // Case 1: we created a new node at this level.
-        if (nextNode->isNull()) {
-            // We're done, so create a new leaf and put it in the node.
-            Leaf *leaf = new Leaf(hash);
-            leaf->getData().push_back(str);
-            *nextNode = HamtNodePointer(leaf);
-        // Case 2: we need to go another level down the HAMT.
-        } else if (nextNode->isChild()) {
-            return nextNode->getChild()->insert(hash >> 6, str);
-        // Case 3: we found a leaf already here. We need to replace it with a
-        // new node, and put both leaves in that node.
-        } else {
-            Leaf *oldLeaf = nextNode->getLeaf();
-            std::uint64_t otherHash = oldLeaf->getHash();
-            if (otherHash == hash) {
-                oldLeaf->getData().push_back(str);
-            } else {
-                assert((otherHash & FIRST_N_BITS) == (hash & FIRST_N_BITS));
-                HamtNode *newNode = new HamtNode();
-                *nextNode = HamtNodePointer(newNode);
-                newNode->insertLeaf(otherHash >> 6, oldLeaf);
-                newNode->insert(hash >> 6, str);
-            }
-        }
+        findChildForInsert(hash)->insert(hash, str);
     }
 
     void insertLeaf(uint64_t hash, Leaf *leaf) {
-        auto nextNode = findChildForInsert(hash);
-
-        // Case 1: we created a new node at this level.
-        if (nextNode->isNull()) {
-            // We're done, so set the leaf's hash.
-            leaf->setHash(hash);
-            // Put the leaf in the new node.
-            *nextNode = HamtNodePointer(leaf);
-        // Case 2: we need to go another level down the HAMT.
-        } else if (nextNode->isChild()) {
-            return nextNode->getChild()->insertLeaf(hash >> 6, leaf);
-        // Case 3: we found a leaf already here. We need to replace it with a
-        // new node, and put both leaves in that node.
-        } else {
-            Leaf *oldLeaf = nextNode->getLeaf();
-            std::uint64_t otherHash = oldLeaf->getHash();
-            HamtNode *newNode = new HamtNode();
-            *nextNode = HamtNodePointer(newNode);
-            newNode->insertLeaf(otherHash >> 6, oldLeaf);
-            newNode->insertLeaf(hash >> 6, leaf);
-        }
+        findChildForInsert(hash)->insertLeaf(hash, leaf);
     }
 
 private:
@@ -212,32 +171,11 @@ private:
 class TopLevelHamtNode {
 public:
     inline void insert(uint64_t hash, std::string *str) {
-        std::uint64_t thisNodeKey = hash & FIRST_N_BITS;
-        auto nextNode = &table[thisNodeKey];
-
-        if (nextNode->isNull()) {
-            Leaf *leaf = new Leaf(hash);
-            leaf->getData().push_back(str);
-            *nextNode = HamtNodePointer(leaf);
-        } else if (nextNode->isChild()) {
-            return nextNode->getChild()->insert(hash >> 6, str);
-        } else {
-            Leaf *oldLeaf = nextNode->getLeaf();
-            std::uint64_t otherHash = oldLeaf->getHash();
-            if (otherHash == hash) {
-                oldLeaf->getData().push_back(str);
-            } else {
-                assert((otherHash & FIRST_N_BITS) == (hash & FIRST_N_BITS));
-                HamtNode *newNode = new HamtNode();
-                *nextNode = HamtNodePointer(newNode);
-                newNode->insertLeaf(otherHash >> 6, oldLeaf);
-                newNode->insert(hash >> 6, str);
-            }
-        }
+        table[hash & FIRST_N_BITS].insert(hash, str);
     }
 
     inline bool lookup(uint64_t hash, std::string *str) {
-        return table[hash & FIRST_N_BITS].lookup(hash >> 6, str);
+        return table[hash & FIRST_N_BITS].lookup(hash, str);
     }
 
 private:
@@ -276,7 +214,7 @@ inline bool HamtNodePointer::lookup(uint64_t hash, std::string *str) {
     if (isNull()) {
         return false;
     } else if (isChild()) {
-        return getChild()->lookup(hash, str);
+        return getChild()->lookup(hash >> 6, str);
     } else {
         Leaf *leaf = getLeaf();
 
@@ -288,3 +226,46 @@ inline bool HamtNodePointer::lookup(uint64_t hash, std::string *str) {
     }
 }
 
+inline void HamtNodePointer::insert(uint64_t hash, std::string *str) {
+    if (isNull()) {
+        Leaf *leaf = new Leaf(hash);
+        leaf->getData().push_back(str);
+        *this = HamtNodePointer(leaf);
+    } else if (isChild()) {
+        getChild()->insert(hash >> 6, str);
+    } else {
+        Leaf *oldLeaf = getLeaf();
+        std::uint64_t otherHash = oldLeaf->getHash();
+        if (hash == otherHash) {
+            oldLeaf->getData().push_back(str);
+        } else {
+            assert((otherHash & FIRST_N_BITS) == (hash & FIRST_N_BITS));
+            HamtNode *newNode = new HamtNode();
+            *this = HamtNodePointer(newNode);
+            newNode->insertLeaf(otherHash >> 6, oldLeaf);
+            newNode->insert(hash >> 6, str);
+        }
+    }
+}
+
+inline void HamtNodePointer::insertLeaf(uint64_t hash, Leaf *leaf) {
+    // Case 1: we created a new node at this level.
+    if (isNull()) {
+        // We're done, so set the leaf's hash.
+        leaf->setHash(hash);
+        // Put the leaf in the new node.
+        *this = HamtNodePointer(leaf);
+    // Case 2: we need to go another level down the HAMT.
+    } else if (isChild()) {
+        return getChild()->insertLeaf(hash >> 6, leaf);
+    // Case 3: we found a leaf already here. We need to replace it with a
+    // new node, and put both leaves in that node.
+    } else {
+        Leaf *oldLeaf = getLeaf();
+        std::uint64_t otherHash = oldLeaf->getHash();
+        HamtNode *newNode = new HamtNode();
+        *this = HamtNodePointer(newNode);
+        newNode->insertLeaf(otherHash >> 6, oldLeaf);
+        newNode->insertLeaf(hash >> 6, leaf);
+    }
+}
