@@ -38,19 +38,19 @@ HamtNodeEntry &HamtNodeEntry::operator=(HamtNodeEntry &&other) {
     return *this;
 }
 
-inline bool HamtNodeEntry::isChild() {
+bool HamtNodeEntry::isChild() {
     return !(ptr & 1);
 }
 
-inline bool HamtNodeEntry::isNull() {
+bool HamtNodeEntry::isNull() {
     return ptr == 0;
 }
 
-inline HamtNode *HamtNodeEntry::getChild() {
+HamtNode *HamtNodeEntry::getChild() {
     return reinterpret_cast<HamtNode *>(ptr);
 }
 
-inline HamtLeaf *HamtNodeEntry::getLeaf() {
+HamtLeaf *HamtNodeEntry::getLeaf() {
     return reinterpret_cast<HamtLeaf *>(ptr & (~1));
 }
 
@@ -84,12 +84,12 @@ HamtLeaf::HamtLeaf(std::uint64_t hash): hash(hash), data() {}
 
 HamtNode::HamtNode() : map(0), children() {}
 
-inline std::uint64_t HamtNode::getIndex(std::uint64_t firstBits) {
+std::uint64_t HamtNode::getIndex(std::uint64_t firstBits) {
     std::uint64_t rest = map >> firstBits;
     return __builtin_popcountll((unsigned long long)rest);
 }
 
-inline int HamtNode::numberOfChildren() {
+int HamtNode::numberOfChildren() {
     return __builtin_popcountll((unsigned long long)map);
 }
 
@@ -97,7 +97,7 @@ inline int HamtNode::numberOfChildren() {
 // TopLevelHamtNode method definitions.
 //
 
-inline void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
+void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
     HamtNodeEntry *entryToInsert = &table[hash & FIRST_N_BITS];
 
     while (true) {
@@ -207,7 +207,7 @@ inline void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
     }
 }
 
-inline bool TopLevelHamtNode::lookup(uint64_t hash, std::string *str) {
+bool TopLevelHamtNode::lookup(uint64_t hash, std::string *str) {
     HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
 
     while (true) {

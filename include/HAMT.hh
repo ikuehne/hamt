@@ -46,13 +46,13 @@ public:
 
     ~HamtNodeEntry();
 
-    inline bool isChild();
+    bool isChild();
 
-    inline bool isNull();
+    bool isNull();
 
-    inline HamtNode *getChild();
+    HamtNode *getChild();
 
-    inline HamtLeaf *getLeaf();
+    HamtLeaf *getLeaf();
 
 private:
     uintptr_t ptr;
@@ -117,20 +117,19 @@ public:
     // number of bits set in `map`.
     HamtNodeEntry children[1];
 
-    inline std::uint64_t getIndex(std::uint64_t firstBits);
+    std::uint64_t getIndex(std::uint64_t firstBits);
 
-    inline int numberOfChildren();
+    int numberOfChildren();
 
 private:
-    inline std::vector<HamtNodeEntry>::iterator
-            findChildForInsert(uint64_t hash);
+    std::vector<HamtNodeEntry>::iterator findChildForInsert(uint64_t hash);
 };
 
 class TopLevelHamtNode {
 public:
-    inline void insert(uint64_t hash, std::string *str);
+    void insert(uint64_t hash, std::string *str);
 
-    inline bool lookup(uint64_t hash, std::string *str);
+    bool lookup(uint64_t hash, std::string *str);
 
 private:
     HamtNodeEntry table[MAX_IDX];
