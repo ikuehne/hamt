@@ -3,14 +3,26 @@
 #include <string>
 #include <vector>
 
-class HamtNode;
-class Leaf;
+// The number of bits we use to index into each level of the trie.
+static const std::uint64_t BITS_PER_LEVEL = 6;
 
-static const std::uint64_t FIRST_6_BITS = (1 << 6) - 1;
+// A mask to take those bits off.
+static const std::uint64_t FIRST_N_BITS = (1ULL << BITS_PER_LEVEL) - 1;
+
+// (Exclusive) maximum value we can index a node with.
+static const std::uint64_t MAX_IDX = 1ULL << BITS_PER_LEVEL;
+
+static_assert(MAX_IDX <= 64,
+              "2^MAX_IDX - 1 must fit within a 64-bit word");
 
 //////////////////////////////////////////////////////////////////////////////
 // Class prototypes.
 //
+
+class HamtNodePointer;
+class Leaf;
+class HamtNode;
+class Hamt;
 
 // A pointer, except that the low bit is used to test whether it is a pointer
 // to a child node or a result.
@@ -79,7 +91,7 @@ private:
     //
     // For example, if this Leaf is one of the children of the root of the
     // HAMT, the full 64 bit hash would be here; if it was one level down, it
-    // would be shifted 6 bits to the right.
+    // would be shifted BITS_PER_LEVEL bits to the right.
     std::uint64_t hash;
     std::vector<std::string *> data;
 };
@@ -97,7 +109,7 @@ public:
         HamtNode *currentNode = this;
 
         while (true) {
-            auto thisNodeKey = hash & FIRST_6_BITS;
+            auto thisNodeKey = hash & FIRST_N_BITS;
             auto map = currentNode->map;
             bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
 
@@ -105,18 +117,20 @@ public:
                 return NULL;
             }
 
-            // thisNodeKey has 6 bits, so this can't shift off all of map.
-            // However, it does keep the bit that we just found, so we have to
-            // subtract 1 from the count of set bits.
+            // thisNodeKey has BITS_PER_LEVEL bits, which is less than
+            // log(64), so this can't shift off all of map.  However, it does
+            // keep the bit that we just found, so we have to subtract 1 from
+            // the count of set bits.
             std::uint64_t rest = map >> thisNodeKey;
             int idx = __builtin_popcountll((unsigned long long)rest) - 1;
             HamtNodePointer &next = currentNode->children[idx];
-            if (!next.isChild()) {
+            if (next.isChild()) {
+                assert(!next.isNull());
+                currentNode = next.getChild();
+                hash >>= 6;
+            } else {
                 return next.getLeaf();
             }
-            assert(!next.isNull());
-            currentNode = next.getChild();
-            hash >>= 6;
         }
     }
 
@@ -140,36 +154,12 @@ public:
             if (otherHash == hash) {
                 oldLeaf->getData().push_back(str);
             } else {
-                assert((otherHash & FIRST_6_BITS) == (hash & FIRST_6_BITS));
+                assert((otherHash & FIRST_N_BITS) == (hash & FIRST_N_BITS));
                 HamtNode *newNode = new HamtNode();
                 *nextNode = HamtNodePointer(newNode);
                 newNode->insertLeaf(otherHash >> 6, oldLeaf);
                 newNode->insert(hash >> 6, str);
             }
-        }
-    }
-
-private:
-    inline std::uint64_t getIndex(std::uint64_t firstBits) {
-        std::uint64_t rest = map >> firstBits;
-        return __builtin_popcountll((unsigned long long)rest);
-    }
-
-    inline std::vector<HamtNodePointer>::iterator
-            findChildForInsert(uint64_t hash) {
-        auto thisNodeKey = hash & FIRST_6_BITS;
-        bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
-        int idx = getIndex(thisNodeKey);
-
-        if (hasChild) {
-            idx -= 1;
-            return children.begin() + idx;
-        } else {
-            // We need to add a new child. Set the bit in the map:
-            map |= (1ULL << thisNodeKey);
-            // And stick it in its expected position.
-            children.insert(children.begin() + idx, HamtNodePointer());
-            return children.begin() + idx;
         }
     }
 
@@ -196,6 +186,31 @@ private:
             newNode->insertLeaf(hash >> 6, leaf);
         }
     }
+
+private:
+    inline std::uint64_t getIndex(std::uint64_t firstBits) {
+        std::uint64_t rest = map >> firstBits;
+        return __builtin_popcountll((unsigned long long)rest);
+    }
+
+    inline std::vector<HamtNodePointer>::iterator
+            findChildForInsert(uint64_t hash) {
+        auto thisNodeKey = hash & FIRST_N_BITS;
+        bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
+        int idx = getIndex(thisNodeKey);
+
+        if (hasChild) {
+            idx -= 1;
+            return children.begin() + idx;
+        } else {
+            // We need to add a new child. Set the bit in the map:
+            map |= (1ULL << thisNodeKey);
+            // And stick it in its expected position.
+            children.insert(children.begin() + idx, HamtNodePointer());
+            return children.begin() + idx;
+        }
+    }
+
     // The map goes low bits to high bits. We'll pretend it's 4 bits instead
     // of 64 for examples. This map:
     // 1101
@@ -210,21 +225,67 @@ private:
     std::vector<HamtNodePointer> children;
 };
 
+class TopLevelHamtNode {
+public:
+    void insert(uint64_t hash, std::string *str) {
+        std::uint64_t thisNodeKey = hash & FIRST_N_BITS;
+        auto nextNode = &table[thisNodeKey];
+
+        if (nextNode->isNull()) {
+            Leaf *leaf = new Leaf(hash);
+            leaf->getData().push_back(str);
+            *nextNode = HamtNodePointer(leaf);
+        } else if (nextNode->isChild()) {
+            return nextNode->getChild()->insert(hash >> 6, str);
+        } else {
+            Leaf *oldLeaf = nextNode->getLeaf();
+            std::uint64_t otherHash = oldLeaf->getHash();
+            if (otherHash == hash) {
+                oldLeaf->getData().push_back(str);
+            } else {
+                assert((otherHash & FIRST_N_BITS) == (hash & FIRST_N_BITS));
+                HamtNode *newNode = new HamtNode();
+                *nextNode = HamtNodePointer(newNode);
+                newNode->insertLeaf(otherHash >> 6, oldLeaf);
+                newNode->insert(hash >> 6, str);
+            }
+        }
+    }
+
+    Leaf *lookup(uint64_t hash) {
+        auto thisNodeKey = hash & FIRST_N_BITS;
+        auto nextNode = &table[thisNodeKey];
+
+        // thisNodeKey has BITS_PER_LEVEL bits, which is less than
+        // log(64), so this can't shift off all of map.  However, it does
+        // keep the bit that we just found, so we have to subtract 1 from
+        // the count of set bits.
+        if (nextNode->isNull()) {
+            return NULL;
+        } else if (nextNode->isChild()) {
+            assert(!nextNode->isNull());
+            return nextNode->getChild()->lookup(hash >> 6);
+        } else {
+            return nextNode->getLeaf();
+        }
+    }
+
+private:
+    HamtNodePointer table[MAX_IDX];
+};
+
 class Hamt {
 public:
-    Hamt() : root(new HamtNode()), hasher() {}
-    ~Hamt() {
-        delete root;
-    }
+    Hamt() : root(), hasher() {}
 
     void insert(std::string *str) {
         std::uint64_t hash = hasher(*str);
-        root->insert(hash, str);
+        root.insert(hash, str);
     }
 
     bool lookup(std::string *str) {
         std::uint64_t hash = hasher(*str);
-        Leaf *leaf = root->lookup(hash);
+        Leaf *leaf = root.lookup(hash);
         if (leaf == NULL) return false;
 
         for (const auto *i: leaf->getData()) {
@@ -233,7 +294,7 @@ public:
         return false;
     }
 private:
-    HamtNode *root;
+    TopLevelHamtNode root;
     std::hash<std::string> hasher;
 };
 
