@@ -4,9 +4,8 @@ project(hamt)
 
 include_directories(include)
 
-file(GLOB SOURCES test/*cpp)
-
-add_executable(test ${SOURCES})
+add_executable(test test/test.cpp)
+add_executable(bench test/bench.cpp)
 
 add_compile_options(
     "-Wall" "-Wpedantic" "-Wextra" "-fexceptions", "Werror"

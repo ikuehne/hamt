@@ -23,12 +23,13 @@ def main():
     os.chdir("build")
     # -DCMAKE_EXPORT... tells cmake to generate a clang compilation database for
     # tooling.
-    wrapCommand(["cmake", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON", ".."])
+    wrapCommand(["cmake", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                          "-DCMAKE_BUILD_TYPE=Release", ".."])
     # Put the clang DB at the project directory so tools can find it.
     os.rename(CLANG_DB_NAME, f"../{CLANG_DB_NAME}")
 
     wrapCommand(["make"])
-    wrapCommand(["./test"])
+    wrapCommand(["./bench"])
 
 if __name__ == "__main__":
     main()

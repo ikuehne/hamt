@@ -94,22 +94,29 @@ public:
     //    - A NULL pointer indicating the key was not present.
     //    - A 
     Leaf *lookup(uint64_t hash) {
-        auto thisNodeKey = hash & FIRST_6_BITS;
-        bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
-        if (!hasChild) {
-            return NULL;
-        }
-        // thisNodeKey has 6 bits, so this can't shift off all of map.
-        // However, it does keep the bit that we just found, so we have to
-        // subtract 1 from the count of set bits.
-        std::uint64_t rest = map >> thisNodeKey;
-        int idx = __builtin_popcountll((unsigned long long)rest) - 1;
-        HamtNodePointer &next = children[idx];
-        if (next.isChild()) {
+        HamtNode *currentNode = this;
+
+        while (true) {
+            auto thisNodeKey = hash & FIRST_6_BITS;
+            auto map = currentNode->map;
+            bool hasChild = (map & (1ULL << thisNodeKey)) != 0;
+
+            if (!hasChild) {
+                return NULL;
+            }
+
+            // thisNodeKey has 6 bits, so this can't shift off all of map.
+            // However, it does keep the bit that we just found, so we have to
+            // subtract 1 from the count of set bits.
+            std::uint64_t rest = map >> thisNodeKey;
+            int idx = __builtin_popcountll((unsigned long long)rest) - 1;
+            HamtNodePointer &next = currentNode->children[idx];
+            if (!next.isChild()) {
+                return next.getLeaf();
+            }
             assert(!next.isNull());
-            return next.getChild()->lookup(hash >> 6);
-        } else {
-            return next.getLeaf();
+            currentNode = next.getChild();
+            hash >>= 6;
         }
     }
 
