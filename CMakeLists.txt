@@ -10,10 +10,10 @@ endif()
 
 include_directories(include)
 
-add_library(libhamt STATIC ${CMAKE_SOURCE_DIR}/src/HAMT.cc)
+add_library(hamt STATIC ${CMAKE_SOURCE_DIR}/src/HAMT.cc)
 
 add_executable(test test/test.cpp)
-target_link_libraries(test libhamt)
+target_link_libraries(test hamt)
 
 add_executable(bench bench/bench.cpp)
-target_link_libraries(bench libhamt)
+target_link_libraries(bench hamt)
