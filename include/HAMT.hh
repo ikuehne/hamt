@@ -277,35 +277,39 @@ inline void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
         } else {
             HamtLeaf *otherLeaf = entryToInsert->getLeaf();
             assert((hash & FIRST_N_BITS) == (otherLeaf->hash & FIRST_N_BITS));
+            std::uint64_t nextKey = (hash >> BITS_PER_LEVEL) & FIRST_N_BITS;
+            std::uint64_t otherNextKey = (otherLeaf->hash >> BITS_PER_LEVEL)
+                                       & FIRST_N_BITS;
 
             if (hash == otherLeaf->hash) {
                 otherLeaf->data.push_back(str);
                 return;
-//            } else if (thisNodeKey > otherNodeKey) {
-//                otherLeaf->hash >>= BITS_PER_LEVEL);
-//                otherHash = otherLeaf->getHash();
-//                HamtNode *newNode = (HamtNode *)malloc(sizeof(HamtNode)
-//                                                     + sizeof(HamtNodeEntry));
-//                HamtLeaf *thisLeaf = new HamtLeaf(hash);
-//                newNode->map = 0;
-//                newNode->map |= 1ULL << thisNodeKey;
-//                newNode->map |= 1ULL << otherNodeKey;
-//                newNode->children[0] = HamtNodeEntry(new HamtLeaf(hash));
-//                newNode->children[1] = HamtNodeEntry(otherLeaf);
-//                *entryToInsert = HamtNodeEntry(newNode);
-//                return;
-//            } else if (thisNodeKey < otherNodeKey) {
-//                otherLeaf->hash >>= BITS_PER_LEVEL);
-//                HamtNode *newNode = (HamtNode *)malloc(sizeof(HamtNode)
-//                                                     + sizeof(HamtNodeEntry));
-//                HamtLeaf *thisLeaf = new HamtLeaf(hash);
-//                newNode->map = 0;
-//                newNode->map |= 1ULL << thisNodeKey;
-//                newNode->map |= 1ULL << otherNodeKey;
-//                newNode->children[1] = HamtNodeEntry(new HamtLeaf(hash));
-//                newNode->children[0] = HamtNodeEntry(otherLeaf);
-//                *entryToInsert = HamtNodeEntry(newNode);
-//                return;
+            } else if (nextKey > otherNextKey) {
+                otherLeaf->hash >>= BITS_PER_LEVEL;
+                hash >>= BITS_PER_LEVEL;
+                HamtNode *newNode = (HamtNode *)malloc(sizeof(HamtNode)
+                                                     + sizeof(HamtNodeEntry));
+                newNode->map = (1ULL << nextKey) | (1ULL << otherNextKey);
+                HamtLeaf *leaf = new HamtLeaf(hash);
+                leaf->data.push_back(str);
+                newNode->children[0] = HamtNodeEntry(leaf);
+                newNode->children[1] = HamtNodeEntry(otherLeaf);
+                *entryToInsert = HamtNodeEntry(newNode);
+                return;
+            } else if (nextKey < otherNextKey) {
+                otherLeaf->hash >>= BITS_PER_LEVEL;
+                hash >>= BITS_PER_LEVEL;
+                HamtNode *newNode = (HamtNode *)malloc(sizeof(HamtNode)
+                                                     + sizeof(HamtNodeEntry));
+                newNode->map = (1ULL << nextKey) | (1ULL << otherNextKey);
+
+                HamtLeaf *leaf = new HamtLeaf(hash);
+                leaf->data.push_back(str);
+
+                newNode->children[0] = HamtNodeEntry(otherLeaf);
+                newNode->children[1] = HamtNodeEntry(leaf);
+                *entryToInsert = HamtNodeEntry(newNode);
+                return;
             } else {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
 
