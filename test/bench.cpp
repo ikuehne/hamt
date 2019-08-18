@@ -58,9 +58,9 @@ int main(void) {
     std::chrono::duration<double> diff = end-start;
 
     std::cout << "Insertion time: " << diff.count() << " s.\n";
-    std::cout << "(Per insertion): " << 1'000'000 * diff.count()
-                                                  / stringsToAdd.size()
-              << " us.\n";
+    std::cout << "(Per insertion): " << 1'000'000'000 * diff.count()
+                                                      / stringsToAdd.size()
+              << " ns.\n";
 
     start = clock.now();
     i = 0;
@@ -73,9 +73,9 @@ int main(void) {
     diff = end-start;
 
     std::cout << "Successful lookup time: " << diff.count() << " s.\n";
-    std::cout << "(Per lookup): " << 1'000'000 * diff.count()
-                                               / stringsToAdd.size()
-              << " us.\n";
+    std::cout << "(Per lookup): " << 1'000'000'000 * diff.count()
+                                                   / stringsToAdd.size()
+              << " ns.\n";
 
     start = clock.now();
     i = 0;
@@ -87,9 +87,9 @@ int main(void) {
     diff = end-start;
 
     std::cout << "Unsuccessful lookup time: " << diff.count() << " s.\n";
-    std::cout << "(Per lookup): " << 1'000'000 * diff.count()
-                                               / stringsToAdd.size()
-              << " us.\n";
+    std::cout << "(Per lookup): " << 1'000'000'000 * diff.count()
+                                                   / stringsToAdd.size()
+              << " ns.\n";
 
     return 0;
 }
