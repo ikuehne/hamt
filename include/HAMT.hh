@@ -167,6 +167,11 @@ private:
 
 };
 
+// The distinguished top-level node.
+//
+// Just a table of MAX_IDX HamtNodeEntrys. The top node is likely to fill up
+// pretty quickly anyway, so we spare the space, and this way avoid a bit of
+// fiddling with the bitmap.
 class TopLevelHamtNode {
 public:
     void insert(uint64_t hash, std::string *str);
@@ -177,6 +182,7 @@ private:
     HamtNodeEntry table[MAX_IDX];
 };
 
+// The HAMT itself. Users should only use this interface.
 class Hamt {
 public:
     // Initialize an empty HAMT.
