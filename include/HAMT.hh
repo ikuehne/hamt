@@ -30,6 +30,15 @@ class HamtNode;
 class Hamt;
 
 // An entry in one of the tables at each node of the trie.
+//
+// Always one of three things:
+//  - A pointer to a child node.
+//  - A pointer to a leaf node.
+//  - NULL, indicating there is nothing at this entry.
+//
+// Each entry fits in a single pointer; the first two cases are distinguished
+// using the pointer's low bit.
+//
 class HamtNodeEntry {
 public:
     explicit HamtNodeEntry(HamtNode *node);
@@ -40,26 +49,48 @@ public:
     // Initialize the pointer to NULL.
     HamtNodeEntry();
 
+    // Move another entry into this one.
+    //
+    // The other entry will be set to NULL.
     HamtNodeEntry(HamtNodeEntry &&other);
-
     HamtNodeEntry &operator=(HamtNodeEntry &&other);
 
+    // Entries delete whatever they point to, including recursively freeing a
+    // subtree.
     ~HamtNodeEntry();
 
-    bool isChild();
+    // Test whether this entry points to a leaf node.
+    bool isLeaf();
 
+    // Test whether this entry is NULL.
     bool isNull();
 
+    // Get a pointer to the child node.
+    //
+    // isLeaf() and isNull() must both be false.
     HamtNode *getChild();
 
+    // Get a pointer to the leaf.
+    //
+    // isLeaf() must be true.
     HamtLeaf *getLeaf();
 
 private:
+    // 0 for NULL. The low bit is set if this points to a leaf.
+    // Otherwise, it points to a node.
     uintptr_t ptr;
 };
 
+// A leaf node.
+//
+// Stores a vector of keys, each of which must have the same hash.
+// Additionally stores a shifted hash to avoid recomputing the hash on inserts;
+// see below.
 class HamtLeaf {
 public:
+    // Construct a new HamtLeaf at the given hash.
+    //
+    // See below for the nature of the hash.
     explicit HamtLeaf(std::uint64_t hash);
 
     // The hash, shifted to reflect the level this leaf is at.
@@ -68,30 +99,43 @@ public:
     // HAMT, the full 64 bit hash would be here; if it was one level down, it
     // would be shifted BITS_PER_LEVEL bits to the right.
     std::uint64_t hash;
+
+    // The keys stored at this node, in the order they were inserted.
     std::vector<std::string *> data;
 };
 
+// A node containing a sub-table.
+//
+// Guaranteed always to have at least one child.
 class HamtNode {
 public:
-    HamtNode();
+    // Efficiently get the number of children of this node.
+    int numberOfChildren();
+
+    // Get the number of child hashes greater than or equal to the given hash,
+    // looking only at the first BITS_PER_LEVEL bits.
+    //
+    // For example, if BITS_PER_LEVEL is 2, and we have hashes 00, 10, and 11
+    // already in this node, numberOfHashesAbove(00) would be 2, and
+    // numberOfHashesAbove(10) would also be 2.
+    std::uint64_t numberOfHashesAbove(std::uint64_t hash);
+
+    // Efficiently test if the hash is in this node, looking only at the first
+    // BITS_PER_LEVEL bits.
+    bool containsHash(std::uint64_t hash);
+
+    void markHash(std::uint64_t hash);
+
+    // This would create an invalid node, since the entries are always
+    // guaranteed nonnull.
+    HamtNode() = delete;
 
     // Don't use new and delete for these; they are too special.
     //
     // We exclusively use `malloc` and `realloc`, because of the
-    // variable-length `children` member
+    // variable-length `children` member.
     void operator delete(void *p) = delete;
     void *operator new(size_t size) = delete;
-
-    // Look up `hash` in this trie.
-    //
-    // Return one of three things:
-    //    - A NULL pointer indicating the key was not present.
-    //    - A 
-    bool lookup(uint64_t hash, std::string *str);
-
-    void insert(uint64_t hash, std::string *str);
-
-    void insertLeaf(uint64_t hash, HamtLeaf *leaf);
 
     // The map goes low bits to high bits. We'll pretend it's 4 bits instead
     // of 64 for examples. The map `1101` has 0, 2 and 3 set.
@@ -115,14 +159,12 @@ public:
     // This is in contiguous memory in the struct for cache reasons. There's
     // always at least 1 element; the number allocated is always equal to the
     // number of bits set in `map`.
+    //
+    //
     HamtNodeEntry children[1];
 
-    std::uint64_t getIndex(std::uint64_t firstBits);
-
-    int numberOfChildren();
-
 private:
-    std::vector<HamtNodeEntry>::iterator findChildForInsert(uint64_t hash);
+
 };
 
 class TopLevelHamtNode {

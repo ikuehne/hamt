@@ -15,105 +15,26 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// HamtNodeEntry method definitions.
-//
-
-HamtNodeEntry::HamtNodeEntry(HamtNode *node)
-    : ptr(reinterpret_cast<std::uintptr_t>(node)) {}
-
-// Initialize the pointer 
-HamtNodeEntry::HamtNodeEntry(HamtLeaf *leaf)
-    : ptr(reinterpret_cast<std::uintptr_t>(leaf) | 1) {}
-
-// Initialize the pointer to NULL.
-HamtNodeEntry::HamtNodeEntry() : ptr(0) {}
-
-HamtNodeEntry::HamtNodeEntry(HamtNodeEntry &&other): ptr(other.ptr) {
-    other.ptr = 0;
-}
-
-HamtNodeEntry &HamtNodeEntry::operator=(HamtNodeEntry &&other) {
-    ptr = other.ptr;
-    other.ptr = 0;
-    return *this;
-}
-
-bool HamtNodeEntry::isChild() {
-    return !(ptr & 1);
-}
-
-bool HamtNodeEntry::isNull() {
-    return ptr == 0;
-}
-
-HamtNode *HamtNodeEntry::getChild() {
-    return reinterpret_cast<HamtNode *>(ptr);
-}
-
-HamtLeaf *HamtNodeEntry::getLeaf() {
-    return reinterpret_cast<HamtLeaf *>(ptr & (~1));
-}
-
-HamtNodeEntry::~HamtNodeEntry() {
-    if (isNull()) {
-        return;
-    } else if (isChild()) {
-        // This gets a bit tricky. We need to free the tree rooted at this
-        // node, but we can't call `delete` because we allocated this child
-        // with `malloc`. So...
-        HamtNode *child = getChild();
-        int nChildren = child->numberOfChildren();
-        for (int i = 0; i < nChildren; ++i) {
-            child->children[i].~HamtNodeEntry();
-        }
-        free(getChild());
-    } else {
-        delete getLeaf();
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////
-// HamtLeaf method definitions.
-//
-
-HamtLeaf::HamtLeaf(std::uint64_t hash): hash(hash), data() {}
-
-//////////////////////////////////////////////////////////////////////////////
-// HamtNode method definitions.
-//
-
-HamtNode::HamtNode() : map(0), children() {}
-
-std::uint64_t HamtNode::getIndex(std::uint64_t firstBits) {
-    std::uint64_t rest = map >> firstBits;
-    return __builtin_popcountll((unsigned long long)rest);
-}
-
-int HamtNode::numberOfChildren() {
-    return __builtin_popcountll((unsigned long long)map);
-}
-
-//////////////////////////////////////////////////////////////////////////////
 // TopLevelHamtNode method definitions.
 //
 
 void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
     HamtNodeEntry *entryToInsert = &table[hash & FIRST_N_BITS];
 
+    if (entryToInsert->isNull()) {
+        HamtLeaf *leaf = new HamtLeaf(hash);
+        leaf->data.push_back(str);
+        *entryToInsert = HamtNodeEntry(leaf);
+        return;
+    }
+
     while (true) {
-        if (entryToInsert->isNull()) {
-            HamtLeaf *leaf = new HamtLeaf(hash);
-            leaf->data.push_back(str);
-            *entryToInsert = HamtNodeEntry(leaf);
-            return;
-        } else if (entryToInsert->isChild()) {
+        if (!entryToInsert->isLeaf()) {
             hash >>= BITS_PER_LEVEL;
             auto nodeToInsert = entryToInsert->getChild();
-            std::uint64_t thisNodeKey = hash & FIRST_N_BITS;
-            bool hasChild = (nodeToInsert->map & (1ULL << thisNodeKey)) != 0;
-            int idx = nodeToInsert->getIndex(thisNodeKey);
+            int idx = nodeToInsert->numberOfHashesAbove(hash);
 
-            if (hasChild) {
+            if (nodeToInsert->containsHash(hash)) {
                 entryToInsert = &nodeToInsert->children[idx - 1];
                 continue;
             } else {
@@ -142,7 +63,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
                 HamtNode *newNode =
                     (HamtNode *)realloc(nodeToInsert, sizeof(HamtNode) + nExtraBytes);
                 // We need to add a new child. Set the bit in the map:
-                newNode->map |= (1ULL << thisNodeKey);
+                newNode->markHash(hash);
                 // Move the entries in the array after where we're going to
                 // insert one over. Needless to say, sketch as hell.
                 std::memmove(&newNode->children[idx + 1],
@@ -165,39 +86,50 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
             if (hash == otherLeaf->hash) {
                 otherLeaf->data.push_back(str);
                 return;
+
             } else if (nextKey > otherNextKey) {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
                 hash >>= BITS_PER_LEVEL;
+
                 HamtNode *newNode = (HamtNode *)malloc(sizeof(HamtNode)
                                                      + sizeof(HamtNodeEntry));
-                newNode->map = (1ULL << nextKey) | (1ULL << otherNextKey);
+                newNode->map = 0;
+                newNode->markHash(hash);
+                newNode->markHash(otherLeaf->hash);
+
                 HamtLeaf *leaf = new HamtLeaf(hash);
                 leaf->data.push_back(str);
+
                 newNode->children[0] = HamtNodeEntry(leaf);
                 newNode->children[1] = HamtNodeEntry(otherLeaf);
+
                 *entryToInsert = HamtNodeEntry(newNode);
+
                 return;
             } else if (nextKey < otherNextKey) {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
                 hash >>= BITS_PER_LEVEL;
+
                 HamtNode *newNode = (HamtNode *)malloc(sizeof(HamtNode)
                                                      + sizeof(HamtNodeEntry));
-                newNode->map = (1ULL << nextKey) | (1ULL << otherNextKey);
+                newNode->map = 0;
+                newNode->markHash(hash);
+                newNode->markHash(otherLeaf->hash);
 
                 HamtLeaf *leaf = new HamtLeaf(hash);
                 leaf->data.push_back(str);
 
                 newNode->children[0] = HamtNodeEntry(otherLeaf);
                 newNode->children[1] = HamtNodeEntry(leaf);
+
                 *entryToInsert = HamtNodeEntry(newNode);
                 return;
             } else {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
 
-                std::uint64_t otherHash = otherLeaf->hash;
-                std::uint64_t otherNodeKey = otherHash & FIRST_N_BITS;
                 HamtNode *newNode = (HamtNode *)malloc(sizeof(HamtNode));
-                newNode->map = 1ULL << otherNodeKey;
+                newNode->map = 0;
+                newNode->markHash(otherLeaf->hash);
                 newNode->children[0] = HamtNodeEntry(otherLeaf);
                 *entryToInsert = HamtNodeEntry(newNode);
 
@@ -210,20 +142,18 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
 bool TopLevelHamtNode::lookup(uint64_t hash, std::string *str) {
     HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
 
+    if (entry->isNull()) return false;
+
     while (true) {
-        if (entry->isNull()) {
-            return false;
-        } else if (entry->isChild()) {
+        if (!entry->isLeaf()) {
             hash >>= BITS_PER_LEVEL;
             HamtNode *node = entry->getChild();
-            auto thisNodeKey = hash & FIRST_N_BITS;
-            bool hasChild = (node->map & (1ULL << thisNodeKey)) != 0;
 
-            if (!hasChild) {
+            if (!node->containsHash(hash)) {
                 return false;
             }
 
-            entry = &node->children[node->getIndex(thisNodeKey) - 1];
+            entry = &node->children[node->numberOfHashesAbove(hash) - 1];
             continue;
         } else {
             HamtLeaf *leaf = entry->getLeaf();
@@ -235,6 +165,93 @@ bool TopLevelHamtNode::lookup(uint64_t hash, std::string *str) {
             return false;
         }
     }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// HamtNodeEntry method definitions.
+//
+
+HamtNodeEntry::HamtNodeEntry(HamtNode *node)
+    : ptr(reinterpret_cast<std::uintptr_t>(node)) {}
+
+// Initialize the pointer 
+HamtNodeEntry::HamtNodeEntry(HamtLeaf *leaf)
+    : ptr(reinterpret_cast<std::uintptr_t>(leaf) | 1) {}
+
+// Initialize the pointer to NULL.
+HamtNodeEntry::HamtNodeEntry() : ptr(0) {}
+
+HamtNodeEntry::HamtNodeEntry(HamtNodeEntry &&other): ptr(other.ptr) {
+    other.ptr = 0;
+}
+
+HamtNodeEntry &HamtNodeEntry::operator=(HamtNodeEntry &&other) {
+    ptr = other.ptr;
+    other.ptr = 0;
+    return *this;
+}
+
+bool HamtNodeEntry::isLeaf() {
+    return ptr & 1;
+}
+
+bool HamtNodeEntry::isNull() {
+    return ptr == 0;
+}
+
+HamtNode *HamtNodeEntry::getChild() {
+    assert(!isNull() && !isLeaf());
+    return reinterpret_cast<HamtNode *>(ptr);
+}
+
+HamtLeaf *HamtNodeEntry::getLeaf() {
+    assert(isLeaf());
+    return reinterpret_cast<HamtLeaf *>(ptr & (~1));
+}
+
+HamtNodeEntry::~HamtNodeEntry() {
+    if (isNull()) {
+        return;
+    } else if (!isLeaf()) {
+        // This gets a bit tricky. We need to free the tree rooted at this
+        // node, but we can't call `delete` because we allocated this child
+        // with `malloc`. So...
+        HamtNode *child = getChild();
+        int nChildren = child->numberOfChildren();
+        for (int i = 0; i < nChildren; ++i) {
+            child->children[i].~HamtNodeEntry();
+        }
+        free(getChild());
+    } else {
+        delete getLeaf();
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// HamtLeaf method definitions.
+//
+
+HamtLeaf::HamtLeaf(std::uint64_t hash): hash(hash), data() {}
+
+//////////////////////////////////////////////////////////////////////////////
+// HamtNode method definitions.
+//
+
+int HamtNode::numberOfChildren() {
+    return __builtin_popcountll((unsigned long long)map);
+}
+
+std::uint64_t HamtNode::numberOfHashesAbove(std::uint64_t hash) {
+    std::uint64_t rest = map >> (hash & FIRST_N_BITS);
+    return __builtin_popcountll((unsigned long long)rest);
+}
+
+bool HamtNode::containsHash(std::uint64_t hash) {
+    return (map & (1ULL << (hash & FIRST_N_BITS))) != 0;
+}
+
+void HamtNode::markHash(std::uint64_t hash) {
+    map |= (1ULL << (hash & FIRST_N_BITS));
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -258,4 +275,3 @@ bool Hamt::lookup(std::string *str) {
     #pragma GCC diagnostic warning "-Wclass-memaccess"
 #endif
 #endif
-
