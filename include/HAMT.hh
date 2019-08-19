@@ -60,20 +60,22 @@ public:
     ~HamtNodeEntry();
 
     // Test whether this entry points to a leaf node.
-    bool isLeaf();
+    bool isLeaf() const;
 
     // Test whether this entry is NULL.
-    bool isNull();
+    bool isNull() const;
 
     // Get a pointer to the child node.
     //
     // isLeaf() and isNull() must both be false.
     HamtNode *getChild();
+    const HamtNode *getChild() const;
 
     // Get a pointer to the leaf.
     //
     // isLeaf() must be true.
     HamtLeaf *getLeaf();
+    const HamtLeaf *getLeaf() const;
 
 private:
     // 0 for NULL. The low bit is set if this points to a leaf.
@@ -88,7 +90,7 @@ private:
 // see below.
 class HamtLeaf {
 public:
-    // Construct a new HamtLeaf at the given hash.
+    // Construct a new HamtLeaf with the given hash and no keys.
     //
     // See below for the nature of the hash.
     explicit HamtLeaf(std::uint64_t hash);
@@ -110,7 +112,7 @@ public:
 class HamtNode {
 public:
     // Efficiently get the number of children of this node.
-    int numberOfChildren();
+    int numberOfChildren() const;
 
     // Get the number of child hashes greater than or equal to the given hash,
     // looking only at the first BITS_PER_LEVEL bits.
@@ -118,11 +120,11 @@ public:
     // For example, if BITS_PER_LEVEL is 2, and we have hashes 00, 10, and 11
     // already in this node, numberOfHashesAbove(00) would be 2, and
     // numberOfHashesAbove(10) would also be 2.
-    std::uint64_t numberOfHashesAbove(std::uint64_t hash);
+    std::uint64_t numberOfHashesAbove(std::uint64_t hash) const;
 
     // Efficiently test if the hash is in this node, looking only at the first
     // BITS_PER_LEVEL bits.
-    bool containsHash(std::uint64_t hash);
+    bool containsHash(std::uint64_t hash) const;
 
     void markHash(std::uint64_t hash);
 
@@ -176,7 +178,7 @@ class TopLevelHamtNode {
 public:
     void insert(uint64_t hash, std::string &&str);
 
-    bool lookup(uint64_t hash, const std::string &str);
+    bool lookup(uint64_t hash, const std::string &str) const;
 
 private:
     HamtNodeEntry table[MAX_IDX];
@@ -192,7 +194,7 @@ public:
     void insert(std::string &&str);
 
     // Lookup a string in the set.
-    bool lookup(const std::string &str);
+    bool lookup(const std::string &str) const;
 private:
     TopLevelHamtNode root;
     std::hash<std::string> hasher;

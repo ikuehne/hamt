@@ -139,15 +139,15 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
     }
 }
 
-bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) {
-    HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
+bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
+    const HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
 
     if (entry->isNull()) return false;
 
     while (true) {
         if (!entry->isLeaf()) {
             hash >>= BITS_PER_LEVEL;
-            HamtNode *node = entry->getChild();
+            const HamtNode *node = entry->getChild();
 
             if (!node->containsHash(hash)) {
                 return false;
@@ -156,7 +156,7 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) {
             entry = &node->children[node->numberOfHashesAbove(hash) - 1];
             continue;
         } else {
-            HamtLeaf *leaf = entry->getLeaf();
+            const HamtLeaf *leaf = entry->getLeaf();
 
             for (const auto &i: leaf->data) {
                 if (i == str) return true;
@@ -191,11 +191,11 @@ HamtNodeEntry &HamtNodeEntry::operator=(HamtNodeEntry &&other) {
     return *this;
 }
 
-bool HamtNodeEntry::isLeaf() {
+bool HamtNodeEntry::isLeaf() const {
     return ptr & 1;
 }
 
-bool HamtNodeEntry::isNull() {
+bool HamtNodeEntry::isNull() const {
     return ptr == 0;
 }
 
@@ -204,7 +204,17 @@ HamtNode *HamtNodeEntry::getChild() {
     return reinterpret_cast<HamtNode *>(ptr);
 }
 
+const HamtNode *HamtNodeEntry::getChild() const {
+    assert(!isNull() && !isLeaf());
+    return reinterpret_cast<HamtNode *>(ptr);
+}
+
 HamtLeaf *HamtNodeEntry::getLeaf() {
+    assert(isLeaf());
+    return reinterpret_cast<HamtLeaf *>(ptr & (~1));
+}
+
+const HamtLeaf *HamtNodeEntry::getLeaf() const {
     assert(isLeaf());
     return reinterpret_cast<HamtLeaf *>(ptr & (~1));
 }
@@ -237,16 +247,16 @@ HamtLeaf::HamtLeaf(std::uint64_t hash): hash(hash), data() {}
 // HamtNode method definitions.
 //
 
-int HamtNode::numberOfChildren() {
+int HamtNode::numberOfChildren() const {
     return __builtin_popcountll((unsigned long long)map);
 }
 
-std::uint64_t HamtNode::numberOfHashesAbove(std::uint64_t hash) {
+std::uint64_t HamtNode::numberOfHashesAbove(std::uint64_t hash) const {
     std::uint64_t rest = map >> (hash & FIRST_N_BITS);
     return __builtin_popcountll((unsigned long long)rest);
 }
 
-bool HamtNode::containsHash(std::uint64_t hash) {
+bool HamtNode::containsHash(std::uint64_t hash) const {
     return (map & (1ULL << (hash & FIRST_N_BITS))) != 0;
 }
 
@@ -263,7 +273,7 @@ void Hamt::insert(std::string &&str) {
     root.insert(hash, std::move(str));
 }
 
-bool Hamt::lookup(const std::string &str) {
+bool Hamt::lookup(const std::string &str) const {
     std::uint64_t hash = hasher(str);
     return root.lookup(hash, str);
 }
