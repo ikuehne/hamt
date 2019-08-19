@@ -125,6 +125,9 @@ public:
 // Guaranteed always to have at least one child.
 class HamtNode {
 public:
+    // Create a new HamtNode with the given entry at the given hash.
+    HamtNode(uint64_t hash, HamtNodeEntry entry);
+
     // Efficiently get the number of children of this node.
     int numberOfChildren() const;
 
@@ -144,15 +147,13 @@ public:
 
     void unmarkHash(std::uint64_t hash);
 
-    // This would create an invalid node, since the entries are always
-    // guaranteed nonnull.
-    HamtNode() = delete;
+    // Creates an empty HamtNode.
+    explicit HamtNode();
 
     // Don't use new and delete for this; it's too special.
     //
     // We exclusively use `malloc` and `realloc`, because of the
     // variable-length `children` member.
-    void *operator new(size_t size) = delete;
     void operator delete(void *p) = delete;
 
     ~HamtNode();
@@ -176,11 +177,8 @@ public:
     // *highest* of the keys stored at this node, it will be *first* in this
     // vector.
     //
-    // This is in contiguous memory in the struct for cache reasons. There's
-    // always at least 1 element; the number allocated is always equal to the
-    // number of bits set in `map`.
-    //
-    //
+    // This is in contiguous memory in the struct for cache reasons. The number
+    // of allocated entries is always equal to the number of bits set in `map`.
     HamtNodeEntry children[1];
 };
 
