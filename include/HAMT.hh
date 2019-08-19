@@ -180,6 +180,8 @@ public:
 
     bool lookup(uint64_t hash, const std::string &str) const;
 
+    bool remove(uint64_t hash, const std::string &str);
+
 private:
     HamtNodeEntry table[MAX_IDX];
 };
@@ -195,6 +197,12 @@ public:
 
     // Lookup a string in the set.
     bool lookup(const std::string &str) const;
+
+    // Delete a string from the set.
+    //
+    // Return whether the string was found.
+    bool remove(const std::string &str);
+
 private:
     TopLevelHamtNode root;
     std::hash<std::string> hasher;

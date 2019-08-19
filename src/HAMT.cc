@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -84,7 +85,11 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                                        & FIRST_N_BITS;
 
             if (hash == otherLeaf->hash) {
-                otherLeaf->data.push_back(std::move(str));
+                if (std::find(otherLeaf->data.begin(),
+                              otherLeaf->data.end(),
+                              str) == otherLeaf->data.end()) {
+                    otherLeaf->data.push_back(std::move(str));
+                }
                 return;
 
             } else if (nextKey > otherNextKey) {
@@ -145,7 +150,13 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
     if (entry->isNull()) return false;
 
     while (true) {
-        if (!entry->isLeaf()) {
+        if (entry->isLeaf()) {
+            const HamtLeaf *leaf = entry->getLeaf();
+
+            return std::find(leaf->data.begin(),
+                             leaf->data.end(),
+                             str) != leaf->data.end();
+        } else {
             hash >>= BITS_PER_LEVEL;
             const HamtNode *node = entry->getChild();
 
@@ -155,14 +166,35 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
 
             entry = &node->children[node->numberOfHashesAbove(hash) - 1];
             continue;
-        } else {
-            const HamtLeaf *leaf = entry->getLeaf();
+        }
+    }
+}
 
-            for (const auto &i: leaf->data) {
-                if (i == str) return true;
+bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
+    HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
+
+    if (entry->isNull()) return false;
+
+    while (true) {
+        if (entry->isLeaf()) {
+            HamtLeaf *leaf = entry->getLeaf();
+            auto it = std::find(leaf->data.begin(), leaf->data.end(), str);
+
+            if (it != leaf->data.end()) {
+                leaf->data.erase(it);
+                // TODO: if this is the last key, compress the tree.
+                return true;
+            }
+            return false;
+        } else {
+            hash >>= BITS_PER_LEVEL;
+            HamtNode *node = entry->getChild();
+
+            if (!node->containsHash(hash)) {
+                return false;
             }
 
-            return false;
+            entry = &node->children[node->numberOfHashesAbove(hash) - 1];
         }
     }
 }
@@ -276,6 +308,11 @@ void Hamt::insert(std::string &&str) {
 bool Hamt::lookup(const std::string &str) const {
     std::uint64_t hash = hasher(str);
     return root.lookup(hash, str);
+}
+
+bool Hamt::remove(const std::string &str) {
+    std::uint64_t hash = hasher(str);
+    return root.remove(hash, str);
 }
 
 // Re-enable the warning we disabled at the start.

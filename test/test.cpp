@@ -27,8 +27,11 @@ int main(void) {
     std::unordered_set<std::string> setOfStringsToAdd;
     std::vector<std::string> stringsToAdd;
 
-    for (int i = 0; i < 20000; ++i) {
+    for (int i = 0; i < 2000; ++i) {
         auto str = random_string();
+        if (setOfStringsToAdd.find(str) != setOfStringsToAdd.end()) {
+            continue;
+        }
         setOfStringsToAdd.insert(str);
         stringsToAdd.push_back(str);
     }
@@ -47,22 +50,39 @@ int main(void) {
     Hamt hamt;
 
     std::vector<std::string> stringsToAddCopy = stringsToAdd;
-    int i = 0;
     for (auto str: stringsToAddCopy) {
-        i += 1;
         hamt.insert(std::move(str));
     }
 
-    i = 0;
+    std::random_shuffle(stringsToAdd.begin(), stringsToAdd.end());
+
     for (const auto &str: stringsToAdd) {
-        i += 1;
         if (!hamt.lookup(str)) die();
     }
 
-    i = 0;
     for (const auto &str: stringsNotToAdd) {
-        i += 1;
         if (hamt.lookup(str)) die();
+        if (hamt.remove(str)) die();
+    }
+
+    std::random_shuffle(stringsToAdd.begin(), stringsToAdd.end());
+
+    for (auto str = stringsToAdd.begin();
+         str < stringsToAdd.begin() + stringsToAdd.size() / 2;
+         str++) {
+        if (!hamt.remove(*str)) die();
+    }
+
+    for (auto str = stringsToAdd.begin();
+         str < stringsToAdd.begin() + stringsToAdd.size() / 2;
+         str++) {
+        if (hamt.lookup(*str)) die();
+    }
+
+    for (auto str = stringsToAdd.begin() + stringsToAdd.size() / 2;
+         str < stringsToAdd.end();
+         str++) {
+        if (!hamt.lookup(*str)) die();
     }
 
     return 0;
