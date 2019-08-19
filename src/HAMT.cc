@@ -73,8 +73,9 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
 
                 HamtLeaf *leaf = new HamtLeaf(hash);
                 leaf->data.push_back(std::move(str));
+                newNode->children[idx].setNull();
                 newNode->children[idx] = HamtNodeEntry(leaf);
-                *entryToInsert = HamtNodeEntry(newNode);
+                entryToInsert->setNode(newNode);
                 return;
             }
         } else {
@@ -175,7 +176,6 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
     assert(!entry->isNull());
 
     if (entry->isLeaf()) {
-        entry->free();
         *entry = HamtNodeEntry();
     } else {
         HamtNode *node = entry->getChild();
@@ -187,7 +187,6 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
         // If we just destructed the node's only child, then delete this node
         // and be done with it:
         if (nChildren == 1) {
-            entry->free();
             *entry = HamtNodeEntry();
             return;
         }
@@ -195,7 +194,7 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
         node->unmarkHash(hash);
         int idx = node->numberOfHashesAbove(hash);
 
-        node->children[idx].free();
+        node->children[idx].~HamtNodeEntry();
 
         // Say there were 5 children before, and we're removing idx 2. Then
         // before we had:
@@ -220,24 +219,12 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
             = (HamtNode *)std::realloc(node,
                                        sizeof(HamtNode)
                                      + (nChildren - 2) * sizeof(HamtNodeEntry));
-        *entry = HamtNodeEntry(newNode);
+        entry->setNode(newNode);
     }
 }
 
 bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
     HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
-
-    // These two variables let us clean up a sub-tree if we delete the only
-    // key it contains. entryToDeleteTo points to either:
-    //
-    // - The entry we're deleting in the top-level table.
-    // - The last node we looked at that had more than one child.
-    //
-    // hashToDeleteTo contains the hash that we had when we looked at that
-    // entry.
-    //
-    // If we delete the last key in a leaf, we delete the subtree starting at
-    // entryToDeleteTo; see deleteFromNode.
     HamtNodeEntry *entryToDeleteTo = entry;
     std::uint64_t hashToDeleteTo = hash >> 6;
 
@@ -256,6 +243,7 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
                     deleteFromNode(entryToDeleteTo, hashToDeleteTo);
                 }
 
+                // TODO: if this is the last key, compress the tree.
                 return true;
             }
             return false;
@@ -272,13 +260,8 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
             }
 
             entry = &node->children[node->numberOfHashesAbove(hash) - 1];
-        }
-    }
-}
 
-TopLevelHamtNode::~TopLevelHamtNode() {
-    for (std::uint64_t i = 0; i < MAX_IDX; ++i) {
-        table[i].free();
+        }
     }
 }
 
@@ -295,6 +278,29 @@ HamtNodeEntry::HamtNodeEntry(HamtLeaf *leaf)
 
 // Initialize the pointer to NULL.
 HamtNodeEntry::HamtNodeEntry() : ptr(0) {}
+
+HamtNodeEntry::HamtNodeEntry(HamtNodeEntry &&other): ptr(other.ptr) {
+    other.ptr = 0;
+}
+
+HamtNodeEntry &HamtNodeEntry::operator=(HamtNodeEntry &&other) {
+    this->~HamtNodeEntry();
+    ptr = other.ptr;
+    other.ptr = 0;
+    return *this;
+}
+
+void HamtNodeEntry::setNull() {
+    ptr = 0;
+}
+
+void HamtNodeEntry::setNode(HamtNode *node) {
+    ptr = reinterpret_cast<std::uintptr_t>(node);
+}
+
+void HamtNodeEntry::setLeaf(HamtLeaf *leaf) {
+    ptr = reinterpret_cast<std::uintptr_t>(leaf) | 1ULL;
+}
 
 bool HamtNodeEntry::isLeaf() const {
     return ptr & 1;
@@ -324,7 +330,7 @@ const HamtLeaf *HamtNodeEntry::getLeaf() const {
     return reinterpret_cast<HamtLeaf *>(ptr & (~1));
 }
 
-void HamtNodeEntry::free() noexcept {
+HamtNodeEntry::~HamtNodeEntry() {
     if (isNull()) {
         return;
     } else if (!isLeaf()) {
@@ -334,9 +340,9 @@ void HamtNodeEntry::free() noexcept {
         HamtNode *child = getChild();
         int nChildren = child->numberOfChildren();
         for (int i = 0; i < nChildren; ++i) {
-            child->children[i].free();
+            child->children[i].~HamtNodeEntry();
         }
-        std::free(getChild());
+        free(getChild());
     } else {
         delete getLeaf();
     }
