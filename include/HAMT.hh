@@ -29,15 +29,6 @@ class HamtLeaf;
 class HamtNode;
 class Hamt;
 
-// HamtNodes need special deletion.
-class HamtNodeDeleter {
-public:
-    void operator()(HamtNode *p);
-};
-
-// A std::unique_ptr that knows how to delete HamtNodes.
-using uniqueHamtNode = std::unique_ptr<HamtNode, HamtNodeDeleter>;
-
 // An entry in one of the tables at each node of the trie.
 //
 // Always one of three things:
@@ -50,7 +41,7 @@ using uniqueHamtNode = std::unique_ptr<HamtNode, HamtNodeDeleter>;
 //
 class HamtNodeEntry {
 public:
-    explicit HamtNodeEntry(uniqueHamtNode node);
+    explicit HamtNodeEntry(std::unique_ptr<HamtNode> node);
 
     // Initialize the pointer 
     explicit HamtNodeEntry(std::unique_ptr<HamtLeaf> leaf);
@@ -80,7 +71,7 @@ public:
     // Get a pointer to the child node.
     //
     // isLeaf() and isNull() must both be false.
-    uniqueHamtNode takeChild();
+    std::unique_ptr<HamtNode> takeChild();
     HamtNode &getChild();
     const HamtNode &getChild() const;
 
@@ -123,6 +114,10 @@ public:
 // A node containing a sub-table.
 //
 // Guaranteed always to have at least one child.
+//
+// This class has variable size depending on how many children it has (a
+// massive pain that we suffer for the sake of cache performance and
+// compactness). Thus instances should *never* be allocated with `new`.
 class HamtNode {
 public:
     // Create a new HamtNode with the given entry at the given hash.
@@ -150,11 +145,7 @@ public:
     // Creates an empty HamtNode.
     explicit HamtNode();
 
-    // Don't use new and delete for this; it's too special.
-    //
-    // We exclusively use `malloc` and `realloc`, because of the
-    // variable-length `children` member.
-    void operator delete(void *p) = delete;
+    void operator delete(void *p);
 
     ~HamtNode();
 
