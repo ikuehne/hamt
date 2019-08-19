@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,15 @@ class HamtLeaf;
 class HamtNode;
 class Hamt;
 
+// HamtNodes need special deletion.
+class HamtNodeDeleter {
+public:
+    void operator()(HamtNode *p);
+};
+
+// A std::unique_ptr that knows how to delete HamtNodes.
+using uniqueHamtNode = std::unique_ptr<HamtNode, HamtNodeDeleter>;
+
 // An entry in one of the tables at each node of the trie.
 //
 // Always one of three things:
@@ -40,10 +50,10 @@ class Hamt;
 //
 class HamtNodeEntry {
 public:
-    explicit HamtNodeEntry(HamtNode *node);
+    explicit HamtNodeEntry(uniqueHamtNode node);
 
     // Initialize the pointer 
-    explicit HamtNodeEntry(HamtLeaf *leaf);
+    explicit HamtNodeEntry(std::unique_ptr<HamtLeaf> leaf);
 
     // Initialize the pointer to NULL.
     HamtNodeEntry();
@@ -55,9 +65,7 @@ public:
     HamtNodeEntry &operator=(HamtNodeEntry &&other);
 
     // Set this entry to NULL, without freeing any underlying memory.
-    void setNull();
-    void setNode(HamtNode *node);
-    void setLeaf(HamtLeaf *leaf);
+    void release();
 
     // Entries delete whatever they point to, including recursively freeing a
     // subtree.
@@ -72,14 +80,16 @@ public:
     // Get a pointer to the child node.
     //
     // isLeaf() and isNull() must both be false.
-    HamtNode *getChild();
-    const HamtNode *getChild() const;
+    uniqueHamtNode takeChild();
+    HamtNode &getChild();
+    const HamtNode &getChild() const;
 
     // Get a pointer to the leaf.
     //
     // isLeaf() must be true.
-    HamtLeaf *getLeaf();
-    const HamtLeaf *getLeaf() const;
+    std::unique_ptr<HamtLeaf> takeLeaf();
+    HamtLeaf &getLeaf();
+    const HamtLeaf &getLeaf() const;
 
 private:
     // 0 for NULL. The low bit is set if this points to a leaf.
@@ -138,12 +148,14 @@ public:
     // guaranteed nonnull.
     HamtNode() = delete;
 
-    // Don't use new and delete for these; they are too special.
+    // Don't use new and delete for this; it's too special.
     //
     // We exclusively use `malloc` and `realloc`, because of the
     // variable-length `children` member.
-    void operator delete(void *p) = delete;
     void *operator new(size_t size) = delete;
+    void operator delete(void *p) = delete;
+
+    ~HamtNode();
 
     // The map goes low bits to high bits. We'll pretend it's 4 bits instead
     // of 64 for examples. The map `1101` has 0, 2 and 3 set.
@@ -170,9 +182,6 @@ public:
     //
     //
     HamtNodeEntry children[1];
-
-private:
-
 };
 
 // The distinguished top-level node.

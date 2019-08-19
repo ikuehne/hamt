@@ -23,25 +23,29 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
     HamtNodeEntry *entryToInsert = &table[hash & FIRST_N_BITS];
 
     if (entryToInsert->isNull()) {
-        HamtLeaf *leaf = new HamtLeaf(hash);
+        auto leaf = std::make_unique<HamtLeaf>(hash);
         leaf->data.push_back(std::move(str));
-        *entryToInsert = HamtNodeEntry(leaf);
+        *entryToInsert = HamtNodeEntry(std::move(leaf));
         return;
     }
 
     while (true) {
         if (!entryToInsert->isLeaf()) {
             hash >>= BITS_PER_LEVEL;
-            auto nodeToInsert = entryToInsert->getChild();
+            auto nodeToInsert = entryToInsert->takeChild();
             int idx = nodeToInsert->numberOfHashesAbove(hash);
 
             if (nodeToInsert->containsHash(hash)) {
-                entryToInsert = &nodeToInsert->children[idx - 1];
+                auto nextEntry = &nodeToInsert->children[idx - 1];
+                *entryToInsert = HamtNodeEntry(std::move(nodeToInsert));
+                entryToInsert = nextEntry;
                 continue;
             } else {
                 std::uint64_t nChildren = nodeToInsert->numberOfChildren() + 1;
                 std::uint64_t nExtraBytes = (nChildren - 1)
                                           * sizeof(HamtNodeEntry);
+                std::uint64_t nBytes = sizeof(HamtNode) + nExtraBytes;
+
                 // Say the old node had 5 entries and we're inserting a new
                 // one at index 2. That is:
                 // Old node:
@@ -61,8 +65,8 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 //     nChildren - idx - 1
                 //
 
-                HamtNode *newNode =
-                    (HamtNode *)realloc(nodeToInsert, sizeof(HamtNode) + nExtraBytes);
+                uniqueHamtNode newNode(
+                        (HamtNode *)realloc(nodeToInsert.release(), nBytes));
                 // We need to add a new child. Set the bit in the map:
                 newNode->markHash(hash);
                 // Move the entries in the array after where we're going to
@@ -71,15 +75,15 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                              &newNode->children[idx],
                              (nChildren - idx - 1) * sizeof(HamtNodeEntry));
 
-                HamtLeaf *leaf = new HamtLeaf(hash);
+                auto leaf = std::make_unique<HamtLeaf>(hash);
                 leaf->data.push_back(std::move(str));
-                newNode->children[idx].setNull();
-                newNode->children[idx] = HamtNodeEntry(leaf);
-                entryToInsert->setNode(newNode);
+                newNode->children[idx].release();
+                newNode->children[idx] = HamtNodeEntry(std::move(leaf));
+                *entryToInsert = HamtNodeEntry(std::move(newNode));
                 return;
             }
         } else {
-            HamtLeaf *otherLeaf = entryToInsert->getLeaf();
+            auto otherLeaf = entryToInsert->takeLeaf();
             assert((hash & FIRST_N_BITS) == (otherLeaf->hash & FIRST_N_BITS));
             std::uint64_t nextKey = (hash >> BITS_PER_LEVEL) & FIRST_N_BITS;
             std::uint64_t otherNextKey = (otherLeaf->hash >> BITS_PER_LEVEL)
@@ -91,53 +95,58 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                               str) == otherLeaf->data.end()) {
                     otherLeaf->data.push_back(std::move(str));
                 }
+                *entryToInsert = HamtNodeEntry(std::move(otherLeaf));
                 return;
 
             } else if (nextKey > otherNextKey) {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
                 hash >>= BITS_PER_LEVEL;
 
-                HamtNode *newNode = (HamtNode *)calloc(sizeof(HamtNode)
-                                                     + sizeof(HamtNodeEntry), 1);
+                uniqueHamtNode newNode(
+                        (HamtNode *)calloc(sizeof(HamtNode)
+                                         + sizeof(HamtNodeEntry), 1));
                 newNode->map = 0;
                 newNode->markHash(hash);
                 newNode->markHash(otherLeaf->hash);
 
-                HamtLeaf *leaf = new HamtLeaf(hash);
+                auto leaf = std::make_unique<HamtLeaf>(hash);
                 leaf->data.push_back(std::move(str));
 
-                newNode->children[0] = HamtNodeEntry(leaf);
-                newNode->children[1] = std::move(*entryToInsert);
+                newNode->children[0] = HamtNodeEntry(std::move(leaf));
+                newNode->children[1] = HamtNodeEntry(std::move(otherLeaf));
 
-                *entryToInsert = HamtNodeEntry(newNode);
+                *entryToInsert = HamtNodeEntry(std::move(newNode));
 
                 return;
             } else if (nextKey < otherNextKey) {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
                 hash >>= BITS_PER_LEVEL;
 
-                HamtNode *newNode = (HamtNode *)calloc(sizeof(HamtNode)
-                                                     + sizeof(HamtNodeEntry), 1);
+                uniqueHamtNode newNode(
+                        (HamtNode *)calloc(sizeof(HamtNode)
+                                         + sizeof(HamtNodeEntry), 1));
                 newNode->map = 0;
                 newNode->markHash(hash);
                 newNode->markHash(otherLeaf->hash);
 
-                HamtLeaf *leaf = new HamtLeaf(hash);
+                auto leaf = std::make_unique<HamtLeaf>(hash);
                 leaf->data.push_back(std::move(str));
 
-                newNode->children[0] = std::move(*entryToInsert);
-                newNode->children[1] = HamtNodeEntry(leaf);
+                newNode->children[0] = HamtNodeEntry(std::move(otherLeaf));
+                newNode->children[1] = HamtNodeEntry(std::move(leaf));
 
-                *entryToInsert = HamtNodeEntry(newNode);
+                *entryToInsert = HamtNodeEntry(std::move(newNode));
+
                 return;
             } else {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
 
-                HamtNode *newNode = (HamtNode *)calloc(sizeof(HamtNode), 1);
+                uniqueHamtNode newNode(
+                        (HamtNode *)calloc(sizeof(HamtNode), 1));
                 newNode->map = 0;
                 newNode->markHash(otherLeaf->hash);
-                newNode->children[0] = std::move(*entryToInsert);
-                *entryToInsert = HamtNodeEntry(newNode);
+                newNode->children[0] = HamtNodeEntry(std::move(otherLeaf));
+                *entryToInsert = HamtNodeEntry(std::move(newNode));
 
                 continue;
             }
@@ -152,20 +161,20 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
 
     while (true) {
         if (entry->isLeaf()) {
-            const HamtLeaf *leaf = entry->getLeaf();
+            const HamtLeaf &leaf = entry->getLeaf();
 
-            return std::find(leaf->data.begin(),
-                             leaf->data.end(),
-                             str) != leaf->data.end();
+            return std::find(leaf.data.begin(),
+                             leaf.data.end(),
+                             str) != leaf.data.end();
         } else {
             hash >>= BITS_PER_LEVEL;
-            const HamtNode *node = entry->getChild();
+            const HamtNode &node = entry->getChild();
 
-            if (!node->containsHash(hash)) {
+            if (!node.containsHash(hash)) {
                 return false;
             }
 
-            entry = &node->children[node->numberOfHashesAbove(hash) - 1];
+            entry = &node.children[node.numberOfHashesAbove(hash) - 1];
             continue;
         }
     }
@@ -178,7 +187,7 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
     if (entry->isLeaf()) {
         *entry = HamtNodeEntry();
     } else {
-        HamtNode *node = entry->getChild();
+        auto node = entry->takeChild();
 
         assert(node->containsHash(hash));
 
@@ -187,7 +196,6 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
         // If we just destructed the node's only child, then delete this node
         // and be done with it:
         if (nChildren == 1) {
-            *entry = HamtNodeEntry();
             return;
         }
 
@@ -215,11 +223,11 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
         // Continuing the above example, we need to realloc to 5 children
         // (nChildren - 1). Since the HamtNode already has space for 1 child
         // built in, that leaves nChildren - 2.
-        HamtNode *newNode
-            = (HamtNode *)std::realloc(node,
-                                       sizeof(HamtNode)
-                                     + (nChildren - 2) * sizeof(HamtNodeEntry));
-        entry->setNode(newNode);
+        uniqueHamtNode newNode(
+            (HamtNode *)std::realloc(node.release(),
+                                     sizeof(HamtNode)
+                                   + (nChildren - 2) * sizeof(HamtNodeEntry)));
+        *entry = HamtNodeEntry(std::move(newNode));
     }
 }
 
@@ -233,34 +241,32 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
     while (true) {
         hash >>= 6;
         if (entry->isLeaf()) {
-            HamtLeaf *leaf = entry->getLeaf();
-            auto it = std::find(leaf->data.begin(), leaf->data.end(), str);
+            auto &leaf = entry->getLeaf();
+            auto it = std::find(leaf.data.begin(), leaf.data.end(), str);
 
-            if (it != leaf->data.end()) {
-                leaf->data.erase(it);
+            if (it != leaf.data.end()) {
+                leaf.data.erase(it);
                 
-                if (leaf->data.empty()) {
+                if (leaf.data.empty()) {
                     deleteFromNode(entryToDeleteTo, hashToDeleteTo);
                 }
 
-                // TODO: if this is the last key, compress the tree.
                 return true;
             }
             return false;
         } else {
-            HamtNode *node = entry->getChild();
+            auto &node = entry->getChild();
 
-            if (node->numberOfChildren() > 1) {
+            if (node.numberOfChildren() > 1) {
                 entryToDeleteTo = entry;
                 hashToDeleteTo = hash;
             }
 
-            if (!node->containsHash(hash)) {
+            if (!node.containsHash(hash)) {
                 return false;
             }
 
-            entry = &node->children[node->numberOfHashesAbove(hash) - 1];
-
+            entry = &node.children[node.numberOfHashesAbove(hash) - 1];
         }
     }
 }
@@ -269,12 +275,12 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
 // HamtNodeEntry method definitions.
 //
 
-HamtNodeEntry::HamtNodeEntry(HamtNode *node)
-    : ptr(reinterpret_cast<std::uintptr_t>(node)) {}
+HamtNodeEntry::HamtNodeEntry(uniqueHamtNode node)
+    : ptr(reinterpret_cast<std::uintptr_t>(node.release())) {}
 
 // Initialize the pointer 
-HamtNodeEntry::HamtNodeEntry(HamtLeaf *leaf)
-    : ptr(reinterpret_cast<std::uintptr_t>(leaf) | 1) {}
+HamtNodeEntry::HamtNodeEntry(std::unique_ptr<HamtLeaf> leaf)
+    : ptr(reinterpret_cast<std::uintptr_t>(leaf.release()) | 1) {}
 
 // Initialize the pointer to NULL.
 HamtNodeEntry::HamtNodeEntry() : ptr(0) {}
@@ -290,16 +296,8 @@ HamtNodeEntry &HamtNodeEntry::operator=(HamtNodeEntry &&other) {
     return *this;
 }
 
-void HamtNodeEntry::setNull() {
+void HamtNodeEntry::release() {
     ptr = 0;
-}
-
-void HamtNodeEntry::setNode(HamtNode *node) {
-    ptr = reinterpret_cast<std::uintptr_t>(node);
-}
-
-void HamtNodeEntry::setLeaf(HamtLeaf *leaf) {
-    ptr = reinterpret_cast<std::uintptr_t>(leaf) | 1ULL;
 }
 
 bool HamtNodeEntry::isLeaf() const {
@@ -310,24 +308,37 @@ bool HamtNodeEntry::isNull() const {
     return ptr == 0;
 }
 
-HamtNode *HamtNodeEntry::getChild() {
+uniqueHamtNode HamtNodeEntry::takeChild() {
     assert(!isNull() && !isLeaf());
-    return reinterpret_cast<HamtNode *>(ptr);
+    uniqueHamtNode result(reinterpret_cast<HamtNode *>(ptr));
+    ptr = 0;
+    return result;
 }
 
-const HamtNode *HamtNodeEntry::getChild() const {
+HamtNode &HamtNodeEntry::getChild() {
     assert(!isNull() && !isLeaf());
-    return reinterpret_cast<HamtNode *>(ptr);
+    return *reinterpret_cast<HamtNode *>(ptr);
 }
 
-HamtLeaf *HamtNodeEntry::getLeaf() {
-    assert(isLeaf());
-    return reinterpret_cast<HamtLeaf *>(ptr & (~1));
+const HamtNode &HamtNodeEntry::getChild() const {
+    assert(!isNull() && !isLeaf());
+    return *reinterpret_cast<HamtNode *>(ptr);
 }
 
-const HamtLeaf *HamtNodeEntry::getLeaf() const {
+std::unique_ptr<HamtLeaf> HamtNodeEntry::takeLeaf() {
+    std::unique_ptr<HamtLeaf> result(reinterpret_cast<HamtLeaf *>(ptr & (~1)));
+    ptr = 0;
+    return result;
+}
+
+HamtLeaf &HamtNodeEntry::getLeaf() {
     assert(isLeaf());
-    return reinterpret_cast<HamtLeaf *>(ptr & (~1));
+    return *reinterpret_cast<HamtLeaf *>(ptr & (~1));
+}
+
+const HamtLeaf &HamtNodeEntry::getLeaf() const {
+    assert(isLeaf());
+    return *reinterpret_cast<HamtLeaf *>(ptr & (~1));
 }
 
 HamtNodeEntry::~HamtNodeEntry() {
@@ -337,14 +348,9 @@ HamtNodeEntry::~HamtNodeEntry() {
         // This gets a bit tricky. We need to free the tree rooted at this
         // node, but we can't call `delete` because we allocated this child
         // with `malloc`. So...
-        HamtNode *child = getChild();
-        int nChildren = child->numberOfChildren();
-        for (int i = 0; i < nChildren; ++i) {
-            child->children[i].~HamtNodeEntry();
-        }
-        free(getChild());
+        takeChild();
     } else {
-        delete getLeaf();
+        takeLeaf();
     }
 }
 
@@ -377,6 +383,22 @@ void HamtNode::markHash(std::uint64_t hash) {
 
 void HamtNode::unmarkHash(std::uint64_t hash) {
     map &= ~(1ULL << (hash & FIRST_N_BITS));
+}
+
+HamtNode::~HamtNode() {
+    int nChildren = numberOfChildren();
+    for (int i = 0; i < nChildren; ++i) {
+        children[i].~HamtNodeEntry();
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// HamtNodeDeleter method definitions.
+//
+
+void HamtNodeDeleter::operator()(HamtNode *node) {
+    node->~HamtNode();
+    free(node);
 }
 
 //////////////////////////////////////////////////////////////////////////////
