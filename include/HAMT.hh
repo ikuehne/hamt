@@ -19,7 +19,6 @@ const std::uint64_t MAX_IDX = 1ULL << BITS_PER_LEVEL;
 
 static_assert(MAX_IDX <= 64, "2^MAX_IDX - 1 must fit within a 64-bit word");
 
-
 //////////////////////////////////////////////////////////////////////////////
 // Class prototypes.
 //
@@ -54,6 +53,11 @@ public:
     // The other entry will be set to NULL.
     HamtNodeEntry(HamtNodeEntry &&other);
     HamtNodeEntry &operator=(HamtNodeEntry &&other);
+
+    // Set this entry to NULL, without freeing any underlying memory.
+    void setNull();
+    void setNode(HamtNode *node);
+    void setLeaf(HamtLeaf *leaf);
 
     // Entries delete whatever they point to, including recursively freeing a
     // subtree.
@@ -127,6 +131,8 @@ public:
     bool containsHash(std::uint64_t hash) const;
 
     void markHash(std::uint64_t hash);
+
+    void unmarkHash(std::uint64_t hash);
 
     // This would create an invalid node, since the entries are always
     // guaranteed nonnull.
