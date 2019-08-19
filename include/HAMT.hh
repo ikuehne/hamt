@@ -101,7 +101,7 @@ public:
     std::uint64_t hash;
 
     // The keys stored at this node, in the order they were inserted.
-    std::vector<std::string *> data;
+    std::vector<std::string> data;
 };
 
 // A node containing a sub-table.
@@ -174,9 +174,9 @@ private:
 // fiddling with the bitmap.
 class TopLevelHamtNode {
 public:
-    void insert(uint64_t hash, std::string *str);
+    void insert(uint64_t hash, std::string &&str);
 
-    bool lookup(uint64_t hash, std::string *str);
+    bool lookup(uint64_t hash, const std::string &str);
 
 private:
     HamtNodeEntry table[MAX_IDX];
@@ -189,10 +189,10 @@ public:
     Hamt() = default;
 
     // Insert a string into the set.
-    void insert(std::string *str);
+    void insert(std::string &&str);
 
     // Lookup a string in the set.
-    bool lookup(std::string *str);
+    bool lookup(const std::string &str);
 private:
     TopLevelHamtNode root;
     std::hash<std::string> hasher;

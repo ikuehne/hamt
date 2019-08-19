@@ -13,55 +13,56 @@ void die() {
 
 static auto generator = std::mt19937();
 
-std::unique_ptr<std::string>random_string()
+std::string random_string()
 {
     int length = generator() % 256;
-    auto str = std::make_unique<std::string>(length,0);
+    auto str = std::string(length,0);
 
-    std::generate_n(str->begin(), length, generator);
+    std::generate_n(str.begin(), length, generator);
 
     return str;
 }
 
 int main(void) {
     std::unordered_set<std::string> setOfStringsToAdd;
-    std::vector<std::unique_ptr<std::string>> stringsToAdd;
+    std::vector<std::string> stringsToAdd;
 
     for (int i = 0; i < 20000; ++i) {
         auto str = random_string();
-        setOfStringsToAdd.insert(*str);
-        stringsToAdd.push_back(std::move(str));
+        setOfStringsToAdd.insert(str);
+        stringsToAdd.push_back(str);
     }
 
-    std::vector<std::unique_ptr<std::string>> stringsNotToAdd;
+    std::vector<std::string> stringsNotToAdd;
 
     for (int i = 0; i < 20000; ++i) {
         auto str = random_string();
-        if (setOfStringsToAdd.find(*str) != setOfStringsToAdd.end()) {
+        if (setOfStringsToAdd.find(str) != setOfStringsToAdd.end()) {
             continue;
         }
 
-        stringsNotToAdd.push_back(std::move(str));
+        stringsNotToAdd.push_back(str);
     }
 
     Hamt hamt;
 
+    std::vector<std::string> stringsToAddCopy = stringsToAdd;
     int i = 0;
-    for (auto &str: stringsToAdd) {
+    for (auto str: stringsToAddCopy) {
         i += 1;
-        hamt.insert(str.get());
+        hamt.insert(std::move(str));
     }
 
     i = 0;
-    for (auto &str: stringsToAdd) {
+    for (const auto &str: stringsToAdd) {
         i += 1;
-        if (!hamt.lookup(str.get())) die();
+        if (!hamt.lookup(str)) die();
     }
 
     i = 0;
-    for (auto &str: stringsNotToAdd) {
+    for (const auto &str: stringsNotToAdd) {
         i += 1;
-        if (hamt.lookup(str.get())) die();
+        if (hamt.lookup(str)) die();
     }
 
     return 0;

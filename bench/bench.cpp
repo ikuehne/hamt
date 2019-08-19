@@ -17,12 +17,12 @@ static auto generator = std::mt19937();
 using seconds = std::chrono::duration<double>;
 using nanoseconds = std::chrono::duration<double, std::ratio<1, 1'000'000'000>>;
 
-std::unique_ptr<std::string>random_string()
+std::string random_string()
 {
     int length = generator() % 256;
-    auto str = std::make_unique<std::string>(length,0);
+    std::string str(length,0);
 
-    std::generate_n(str->begin(), length, generator);
+    std::generate_n(str.begin(), length, generator);
 
     return str;
 }
@@ -46,43 +46,44 @@ void benchmark(std::string name, int nIterations, std::function<void(void)> op)
 
 int main(void) {
     std::unordered_set<std::string> setOfStringsToAdd;
-    std::vector<std::unique_ptr<std::string>> stringsToAdd;
+    std::vector<std::string> stringsToAdd;
 
     for (int i = 0; i < 1000000; ++i) {
         auto str = random_string();
-        setOfStringsToAdd.insert(*str);
-        stringsToAdd.push_back(std::move(str));
+        setOfStringsToAdd.insert(str);
+        stringsToAdd.push_back(str);
     }
 
-    std::vector<std::unique_ptr<std::string>> stringsNotToAdd;
+    std::vector<std::string> stringsNotToAdd;
 
     for (int i = 0; i < 1000000; ++i) {
         auto str = random_string();
-        if (setOfStringsToAdd.find(*str) != setOfStringsToAdd.end()) {
+        if (setOfStringsToAdd.find(str) != setOfStringsToAdd.end()) {
             continue;
         }
 
-        stringsNotToAdd.push_back(std::move(str));
+        stringsNotToAdd.push_back(str);
     }
 
     Hamt hamt;
 
-    auto iter = stringsToAdd.begin();
+    auto stringsToAddCopy = stringsToAdd;
+    auto iter = stringsToAddCopy.begin();
     benchmark("Random string insertion", stringsToAdd.size(), [&]() -> void {
-        hamt.insert(iter->get());
+        hamt.insert(std::move(*iter));
         iter++;
     });
 
     iter = stringsToAdd.begin();
     benchmark("Successful string lookup", stringsToAdd.size(), [&]() -> void {
-        hamt.lookup(iter->get());
+        hamt.lookup(*iter);
         iter++;
     });
 
     iter = stringsNotToAdd.begin();
     benchmark("Unsuccessful string lookup", stringsNotToAdd.size(),
               [&]() -> void {
-        hamt.lookup(iter->get());
+        hamt.lookup(*iter);
         iter++;
     });
 

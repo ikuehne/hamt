@@ -18,12 +18,12 @@
 // TopLevelHamtNode method definitions.
 //
 
-void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
+void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
     HamtNodeEntry *entryToInsert = &table[hash & FIRST_N_BITS];
 
     if (entryToInsert->isNull()) {
         HamtLeaf *leaf = new HamtLeaf(hash);
-        leaf->data.push_back(str);
+        leaf->data.push_back(std::move(str));
         *entryToInsert = HamtNodeEntry(leaf);
         return;
     }
@@ -71,7 +71,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
                              (nChildren - idx - 1) * sizeof(HamtNodeEntry));
 
                 HamtLeaf *leaf = new HamtLeaf(hash);
-                leaf->data.push_back(str);
+                leaf->data.push_back(std::move(str));
                 newNode->children[idx] = HamtNodeEntry(leaf);
                 *entryToInsert = HamtNodeEntry(newNode);
                 return;
@@ -84,7 +84,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
                                        & FIRST_N_BITS;
 
             if (hash == otherLeaf->hash) {
-                otherLeaf->data.push_back(str);
+                otherLeaf->data.push_back(std::move(str));
                 return;
 
             } else if (nextKey > otherNextKey) {
@@ -98,7 +98,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
                 newNode->markHash(otherLeaf->hash);
 
                 HamtLeaf *leaf = new HamtLeaf(hash);
-                leaf->data.push_back(str);
+                leaf->data.push_back(std::move(str));
 
                 newNode->children[0] = HamtNodeEntry(leaf);
                 newNode->children[1] = HamtNodeEntry(otherLeaf);
@@ -117,7 +117,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
                 newNode->markHash(otherLeaf->hash);
 
                 HamtLeaf *leaf = new HamtLeaf(hash);
-                leaf->data.push_back(str);
+                leaf->data.push_back(std::move(str));
 
                 newNode->children[0] = HamtNodeEntry(otherLeaf);
                 newNode->children[1] = HamtNodeEntry(leaf);
@@ -139,7 +139,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string *str) {
     }
 }
 
-bool TopLevelHamtNode::lookup(uint64_t hash, std::string *str) {
+bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) {
     HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
 
     if (entry->isNull()) return false;
@@ -158,8 +158,8 @@ bool TopLevelHamtNode::lookup(uint64_t hash, std::string *str) {
         } else {
             HamtLeaf *leaf = entry->getLeaf();
 
-            for (const auto *i: leaf->data) {
-                if (*i == *str) return true;
+            for (const auto &i: leaf->data) {
+                if (i == str) return true;
             }
 
             return false;
@@ -258,13 +258,13 @@ void HamtNode::markHash(std::uint64_t hash) {
 // Hamt method definitions.
 //
 
-void Hamt::insert(std::string *str) {
-    std::uint64_t hash = hasher(*str);
-    root.insert(hash, str);
+void Hamt::insert(std::string &&str) {
+    std::uint64_t hash = hasher(str);
+    root.insert(hash, std::move(str));
 }
 
-bool Hamt::lookup(std::string *str) {
-    std::uint64_t hash = hasher(*str);
+bool Hamt::lookup(const std::string &str) {
+    std::uint64_t hash = hasher(str);
     return root.lookup(hash, str);
 }
 
