@@ -48,20 +48,14 @@ public:
     // Initialize the pointer to NULL.
     HamtNodeEntry();
 
-    // Move another entry into this one.
-    //
-    // The other entry will be set to NULL.
-    HamtNodeEntry(HamtNodeEntry &&other);
-    HamtNodeEntry &operator=(HamtNodeEntry &&other);
-
-    // Set this entry to NULL, without freeing any underlying memory.
-    void setNull();
-    void setNode(HamtNode *node);
-    void setLeaf(HamtLeaf *leaf);
-
-    // Entries delete whatever they point to, including recursively freeing a
+    // Deletes whatever the entry points to, including recursively freeing a
     // subtree.
-    ~HamtNodeEntry();
+    void free() noexcept;
+
+    // Note that the destructor does not free its memory--I tried doing it
+    // that way and with the reallocing and the memmoving it was too subtle.
+    // The `free` method must be called to delete an entry.
+    ~HamtNodeEntry() = default;
 
     // Test whether this entry points to a leaf node.
     bool isLeaf() const;
@@ -187,6 +181,8 @@ public:
     bool lookup(uint64_t hash, const std::string &str) const;
 
     bool remove(uint64_t hash, const std::string &str);
+
+    ~TopLevelHamtNode();
 
 private:
     HamtNodeEntry table[MAX_IDX];
