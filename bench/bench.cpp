@@ -50,6 +50,11 @@ int main(void) {
 
     for (int i = 0; i < 1000000; ++i) {
         auto str = random_string();
+
+        if (setOfStringsToAdd.find(str) != setOfStringsToAdd.end()) {
+            continue;
+        }
+
         setOfStringsToAdd.insert(str);
         stringsToAdd.push_back(str);
     }
@@ -74,18 +79,51 @@ int main(void) {
         iter++;
     });
 
-    iter = stringsToAdd.begin();
-    benchmark("Successful string lookup", stringsToAdd.size(), [&]() -> void {
-        hamt.lookup(*iter);
-        iter++;
-    });
-
     iter = stringsNotToAdd.begin();
     benchmark("Unsuccessful string lookup", stringsNotToAdd.size(),
               [&]() -> void {
         hamt.lookup(*iter);
         iter++;
     });
+
+    iter = stringsToAdd.begin();
+    benchmark("Successful string lookup", stringsToAdd.size(), [&]() -> void {
+        hamt.lookup(*iter);
+        iter++;
+    });
+
+    std::random_shuffle(stringsToAdd.begin(),    stringsToAdd.end());
+    std::random_shuffle(stringsNotToAdd.begin(), stringsNotToAdd.end());
+
+    iter = stringsNotToAdd.begin();
+    benchmark("Unsuccessful string lookup (shuffled)",
+              stringsNotToAdd.size(),
+              [&]() -> void {
+        hamt.lookup(*iter);
+        iter++;
+    });
+
+    iter = stringsToAdd.begin();
+    benchmark("Successful string lookup (shuffled)",
+              stringsToAdd.size(), [&]() -> void {
+        hamt.lookup(*iter);
+        iter++;
+    });
+
+    iter = stringsNotToAdd.begin();
+    benchmark("Unsuccessful string deletion (shuffled)",
+              stringsNotToAdd.size() / 2, [&]() -> void {
+        hamt.remove(*iter);
+        iter++;
+    });
+
+    iter = stringsToAdd.begin();
+    benchmark("Successful string deletion (shuffled)",
+              stringsToAdd.size() / 2, [&]() -> void {
+        hamt.remove(*iter);
+        iter++;
+    });
+
 
     hamt = Hamt();
 
