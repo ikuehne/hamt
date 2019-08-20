@@ -72,9 +72,10 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 *entryToInsert = HamtNodeEntry(std::move(otherLeaf));
                 return;
 
-            } else if (nextKey > otherNextKey) {
+            } else if (nextKey != otherNextKey) {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
                 hash >>= BITS_PER_LEVEL;
+                auto otherHash = otherLeaf->hash;
 
                 // We know the first child will be a leaf containing the key
                 // we're inserting. Create that leaf:
@@ -85,31 +86,8 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 size_t nBytes = sizeof(HamtNode) + sizeof(HamtNodeEntry);
                 void *mem = calloc(nBytes, 1);
                 std::unique_ptr<HamtNode> newNode(
-                        new (mem) HamtNode(hash,
-                                           HamtNodeEntry(std::move(leaf))));
-
-                // Add the other leaf as the second child:
-                newNode->markHash(otherLeaf->hash);
-                newNode->children[1] = HamtNodeEntry(std::move(otherLeaf));
-
-                *entryToInsert = HamtNodeEntry(std::move(newNode));
-
-                return;
-            } else if (nextKey < otherNextKey) {
-                otherLeaf->hash >>= BITS_PER_LEVEL;
-                hash >>= BITS_PER_LEVEL;
-
-                size_t nBytes = sizeof(HamtNode) + sizeof(HamtNodeEntry);
-                void *mem = calloc(nBytes, 1);
-                std::unique_ptr<HamtNode> newNode(
-                        new (mem) HamtNode(otherLeaf->hash,
-                                           HamtNodeEntry(std::move(otherLeaf))));
-
-                newNode->markHash(hash);
-
-                auto leaf = std::make_unique<HamtLeaf>(hash);
-                leaf->data.push_back(std::move(str));
-                newNode->children[1] = HamtNodeEntry(std::move(leaf));
+                        new (mem) HamtNode(hash, HamtNodeEntry(std::move(leaf)),
+                                           otherHash, HamtNodeEntry(std::move(otherLeaf))));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
 
@@ -328,8 +306,27 @@ HamtNode::HamtNode(uint64_t hash, HamtNodeEntry entry)
     new (&children[0]) HamtNodeEntry(std::move(entry));
 }
 
-HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
-                   uint64_t hash) {
+HamtNode::HamtNode(uint64_t hash1, HamtNodeEntry entry1,
+                   uint64_t hash2, HamtNodeEntry entry2)
+{
+    auto key1 = hash1 & FIRST_N_BITS;
+    auto key2 = hash2 & FIRST_N_BITS;
+
+    map = (1ULL << key1) | (1ULL << key2);
+
+    HamtNodeEntry firstEntry;
+    HamtNodeEntry secondEntry;
+
+    if (key1 > key2) {
+        new (&children[0]) HamtNodeEntry(std::move(entry1));
+        new (&children[1]) HamtNodeEntry(std::move(entry2));
+    } else {
+        new (&children[0]) HamtNodeEntry(std::move(entry2));
+        new (&children[1]) HamtNodeEntry(std::move(entry1));
+    }
+}
+
+HamtNode::HamtNode(std::unique_ptr<HamtNode> node, uint64_t hash) {
     map = node->map;
     node->map = 0;
     unmarkHash(hash);

@@ -122,6 +122,10 @@ public:
     // Create a new HamtNode with the given entry at the given hash.
     HamtNode(uint64_t hash, HamtNodeEntry entry);
 
+    // Create a new HamtNode with the given entry at the given hash.
+    HamtNode(uint64_t hash1, HamtNodeEntry entry1,
+             uint64_t hash2, HamtNodeEntry entry2);
+
     // Create a new HamtNode based on the given node, but with the entry at
     // the given hash removed.
     HamtNode(std::unique_ptr<HamtNode> node,
