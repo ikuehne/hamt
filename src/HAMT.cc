@@ -44,31 +44,14 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 int nChildren = nodeToInsert->numberOfChildren() + 1;
                 int nExtraBytes = (nChildren - 1) * sizeof(HamtNodeEntry);
                 void *mem = malloc(sizeof(HamtNode) + nExtraBytes);
-                std::unique_ptr<HamtNode> newNode(new (mem) HamtNode());
-
-                // We need to add a new child. Set the bit in the map:
-                newNode->map = nodeToInsert->map;
-                nodeToInsert->map = 0;
-                newNode->markHash(hash);
 
                 auto leaf = std::make_unique<HamtLeaf>(hash);
                 leaf->data.push_back(std::move(str));
 
-                // This is obviously sketchy, but with GCC benchmarking shows
-                // it's vastly faster than copying the elements over one by
-                // one.
-                std::memcpy(&newNode->children[0],
-                            &nodeToInsert->children[0],
-                            idx * sizeof(HamtNodeEntry));
-
-                new (&newNode->children[idx]) HamtNodeEntry(std::move(leaf));
-
-                std::memcpy(&newNode->children[idx + 1],
-                            &nodeToInsert->children[idx],
-                            (nChildren - idx - 1) * sizeof(HamtNodeEntry));
-
-                std::memset(&nodeToInsert->children[0], 0,
-                            sizeof(HamtNodeEntry) * (nChildren - 1));
+                std::unique_ptr<HamtNode> newNode(
+                        new (mem) HamtNode(std::move(nodeToInsert),
+                                           std::move(leaf),
+                                           hash));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
                 return;
@@ -371,6 +354,29 @@ HamtNode::HamtNode(uint64_t hash, HamtNodeEntry entry)
     : map(1ULL << (hash & FIRST_N_BITS))
 {
     children[0] = std::move(entry);
+}
+
+HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
+                   std::unique_ptr<HamtLeaf> leaf,
+                   std::uint64_t hash) {
+    std::uint64_t nChildren = node->numberOfChildren() + 1;
+    map = node->map;
+    node->map = 0;
+    assert(!containsHash(hash));
+    size_t idx = numberOfHashesAbove(hash);
+    markHash(hash);
+    std::memcpy(&children[0],
+                &node->children[0],
+                idx * sizeof(HamtNodeEntry));
+
+    new (&children[idx]) HamtNodeEntry(std::move(leaf));
+
+    std::memcpy(&children[idx + 1],
+                &node->children[idx],
+                (nChildren - idx - 1) * sizeof(HamtNodeEntry));
+
+    std::memset(&node->children[0], 0,
+                sizeof(HamtNodeEntry) * (nChildren - 1));
 }
 
 int HamtNode::numberOfChildren() const {

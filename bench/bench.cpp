@@ -5,6 +5,7 @@
 #include <random>
 #include <memory>
 #include <unordered_set>
+#include <set>
 
 #include "HAMT.hh"
 
@@ -44,7 +45,7 @@ void benchmark(std::string name, int nIterations, std::function<void(void)> op)
     std::cout << "    Per operation: " << perOp << " ns.\n";
 }
 
-int main(void) {
+void benchmarkHamt() {
     std::unordered_set<std::string> setOfStringsToAdd;
     std::vector<std::string> stringsToAdd;
 
@@ -123,9 +124,96 @@ int main(void) {
         hamt.remove(*iter);
         iter++;
     });
+}
 
+void benchmarkMap() {
+    std::unordered_set<std::string> setOfStringsToAdd;
+    std::vector<std::string> stringsToAdd;
 
-    hamt = Hamt();
+    for (int i = 0; i < 1000000; ++i) {
+        auto str = random_string();
+
+        if (setOfStringsToAdd.find(str) != setOfStringsToAdd.end()) {
+            continue;
+        }
+
+        setOfStringsToAdd.insert(str);
+        stringsToAdd.push_back(str);
+    }
+
+    std::vector<std::string> stringsNotToAdd;
+
+    for (int i = 0; i < 1000000; ++i) {
+        auto str = random_string();
+        if (setOfStringsToAdd.find(str) != setOfStringsToAdd.end()) {
+            continue;
+        }
+
+        stringsNotToAdd.push_back(str);
+    }
+
+    std::unordered_set<std::string> set;
+
+    auto stringsToAddCopy = stringsToAdd;
+    auto iter = stringsToAddCopy.begin();
+    benchmark("(std::unordered_set) Random string insertion", stringsToAdd.size(), [&]() -> void {
+        set.insert(std::move(*iter));
+        iter++;
+    });
+
+    iter = stringsNotToAdd.begin();
+    benchmark("(std::unordered_set) Unsuccessful string lookup", stringsNotToAdd.size(),
+              [&]() -> void {
+        set.find(*iter);
+        iter++;
+    });
+
+    iter = stringsToAdd.begin();
+    benchmark("(std::unordered_set) Successful string lookup", stringsToAdd.size(), [&]() -> void {
+        set.find(*iter);
+        iter++;
+    });
+
+    std::random_shuffle(stringsToAdd.begin(),    stringsToAdd.end());
+    std::random_shuffle(stringsNotToAdd.begin(), stringsNotToAdd.end());
+
+    iter = stringsNotToAdd.begin();
+    benchmark("(std::unordered_set) Unsuccessful string lookup (shuffled)",
+              stringsNotToAdd.size(),
+              [&]() -> void {
+        set.find(*iter);
+        iter++;
+    });
+
+    iter = stringsToAdd.begin();
+    benchmark("(std::unordered_set) Successful string lookup (shuffled)",
+              stringsToAdd.size(), [&]() -> void {
+        set.find(*iter);
+        iter++;
+    });
+
+    iter = stringsNotToAdd.begin();
+    benchmark("(std::unordered_set) Unsuccessful string deletion (shuffled)",
+              stringsNotToAdd.size() / 2, [&]() -> void {
+        set.erase(*iter);
+        iter++;
+    });
+
+    iter = stringsToAdd.begin();
+    benchmark("(std::unordered_set) Successful string deletion (shuffled)",
+              stringsToAdd.size() / 2, [&]() -> void {
+        set.erase(*iter);
+        iter++;
+    });
+}
+
+int main(void) {
+    std::cout << "Testing HAMT:\n\n";
+    benchmarkHamt();
+
+    std::cout << "\n\nTesting std::unordered_set:\n\n";
+
+    benchmarkMap();
 
     return 0;
 }

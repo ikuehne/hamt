@@ -43,7 +43,6 @@ class HamtNodeEntry {
 public:
     explicit HamtNodeEntry(std::unique_ptr<HamtNode> node);
 
-    // Initialize the pointer 
     explicit HamtNodeEntry(std::unique_ptr<HamtLeaf> leaf);
 
     // Initialize the pointer to NULL.
@@ -123,8 +122,16 @@ public:
     // Create a new HamtNode with the given entry at the given hash.
     HamtNode(uint64_t hash, HamtNodeEntry entry);
 
+    // Create a new HamtNode based on the given node, but with the given leaf
+    // and hash added (at the appropriate index).
+    HamtNode(std::unique_ptr<HamtNode> node,
+             std::unique_ptr<HamtLeaf> leaf,
+             std::uint64_t hash);
+
     // Efficiently get the number of children of this node.
     int numberOfChildren() const;
+
+    HamtNode(const HamtNode &) = delete;
 
     // Get the number of child hashes greater than or equal to the given hash,
     // looking only at the first BITS_PER_LEVEL bits.
