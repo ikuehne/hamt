@@ -161,6 +161,7 @@ public:
 
     void unmarkHash(uint64_t hash);
 
+    void *operator new(size_t size, int nChildren);
     void operator delete(void *p);
 
     ~HamtNode();

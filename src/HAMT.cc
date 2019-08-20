@@ -42,16 +42,14 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 continue;
             } else {
                 int nChildren = nodeToInsert->numberOfChildren() + 1;
-                int nExtraBytes = (nChildren - 1) * sizeof(HamtNodeEntry);
-                void *mem = malloc(sizeof(HamtNode) + nExtraBytes);
 
                 auto leaf = std::make_unique<HamtLeaf>(hash);
                 leaf->data.push_back(std::move(str));
 
                 std::unique_ptr<HamtNode> newNode(
-                        new (mem) HamtNode(std::move(nodeToInsert),
-                                           HamtNodeEntry(std::move(leaf)),
-                                           hash));
+                        new (nChildren) HamtNode(std::move(nodeToInsert),
+                                                 HamtNodeEntry(std::move(leaf)),
+                                                 hash));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
                 return;
@@ -83,11 +81,9 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 leaf->data.push_back(std::move(str));
 
                 // And make a new node with that leaf, plus space for one more:
-                size_t nBytes = sizeof(HamtNode) + sizeof(HamtNodeEntry);
-                void *mem = calloc(nBytes, 1);
                 std::unique_ptr<HamtNode> newNode(
-                        new (mem) HamtNode(hash, HamtNodeEntry(std::move(leaf)),
-                                           otherHash, HamtNodeEntry(std::move(otherLeaf))));
+                        new (2) HamtNode(hash, HamtNodeEntry(std::move(leaf)),
+                                         otherHash, HamtNodeEntry(std::move(otherLeaf))));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
 
@@ -95,10 +91,9 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
             } else {
                 otherLeaf->hash >>= BITS_PER_LEVEL;
 
-                void *mem = calloc(sizeof(HamtNode), 1);
                 std::unique_ptr<HamtNode> newNode(
-                        new (mem) HamtNode(otherLeaf->hash,
-                                           HamtNodeEntry(std::move(otherLeaf))));
+                        new (1) HamtNode(otherLeaf->hash,
+                                         HamtNodeEntry(std::move(otherLeaf))));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
 
@@ -153,15 +148,8 @@ void deleteFromNode(HamtNodeEntry *entry, uint64_t hash) {
         }
 
         // Otherwise, we'll want to allocate a new, smaller node.
-
-        // Continuing the above example, we need to realloc to 5 children
-        // (nChildren - 1). Since the HamtNode already has space for 1 child
-        // built in, that leaves nChildren - 2.
-        size_t nBytes = sizeof(HamtNode)
-                      + sizeof(HamtNodeEntry) * (nChildren - 2);
-        void *mem = malloc(nBytes);
         std::unique_ptr<HamtNode> newNode(
-                new (mem) HamtNode(std::move(node), hash));
+                new (nChildren - 1) HamtNode(std::move(node), hash));
 
         *entry = HamtNodeEntry(std::move(newNode));
     }
@@ -281,9 +269,6 @@ HamtNodeEntry::~HamtNodeEntry() {
     if (isNull()) {
         return;
     } else if (!isLeaf()) {
-        // This gets a bit tricky. We need to free the tree rooted at this
-        // node, but we can't call `delete` because we allocated this child
-        // with `malloc`. So...
         takeChild();
     } else {
         takeLeaf();
@@ -405,6 +390,10 @@ HamtNode::~HamtNode() {
     for (int i = 0; i < nChildren; ++i) {
         children[i].~HamtNodeEntry();
     }
+}
+
+void *HamtNode::operator new(size_t, int nChildren) {
+    return malloc(sizeof(HamtNode) + (nChildren - 1) * sizeof(HamtNodeEntry));
 }
 
 void HamtNode::operator delete(void *p) {
