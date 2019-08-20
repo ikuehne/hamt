@@ -10,13 +10,13 @@
 //
 
 // The number of bits we use to index into each level of the trie.
-const std::uint64_t BITS_PER_LEVEL = 6;
+const uint64_t BITS_PER_LEVEL = 6;
 
 // A mask to take those bits off.
-const std::uint64_t FIRST_N_BITS = (1ULL << BITS_PER_LEVEL) - 1;
+const uint64_t FIRST_N_BITS = (1ULL << BITS_PER_LEVEL) - 1;
 
 // (Exclusive) maximum value we can index a node with.
-const std::uint64_t MAX_IDX = 1ULL << BITS_PER_LEVEL;
+const uint64_t MAX_IDX = 1ULL << BITS_PER_LEVEL;
 
 static_assert(MAX_IDX <= 64, "2^MAX_IDX - 1 must fit within a 64-bit word");
 
@@ -97,14 +97,14 @@ public:
     // Construct a new HamtLeaf with the given hash and no keys.
     //
     // See below for the nature of the hash.
-    explicit HamtLeaf(std::uint64_t hash);
+    explicit HamtLeaf(uint64_t hash);
 
     // The hash, shifted to reflect the level this leaf is at.
     //
     // For example, if this HamtLeaf is one of the children of the root of the
     // HAMT, the full 64 bit hash would be here; if it was one level down, it
     // would be shifted BITS_PER_LEVEL bits to the right.
-    std::uint64_t hash;
+    uint64_t hash;
 
     // The keys stored at this node, in the order they were inserted.
     std::vector<std::string> data;
@@ -122,15 +122,23 @@ public:
     // Create a new HamtNode with the given entry at the given hash.
     HamtNode(uint64_t hash, HamtNodeEntry entry);
 
+    // Create a new HamtNode based on the given node, but with the entry at
+    // the given hash removed.
+    HamtNode(std::unique_ptr<HamtNode> node,
+             uint64_t hash);
+
     // Create a new HamtNode based on the given node, but with the given leaf
     // and hash added (at the appropriate index).
     HamtNode(std::unique_ptr<HamtNode> node,
              std::unique_ptr<HamtLeaf> leaf,
-             std::uint64_t hash);
+             uint64_t hash);
 
     // Efficiently get the number of children of this node.
     int numberOfChildren() const;
 
+    // Empty HamtNodes are not allowed.
+    HamtNode() = delete;
+    // Nor is copying HamtNodes.
     HamtNode(const HamtNode &) = delete;
 
     // Get the number of child hashes greater than or equal to the given hash,
@@ -139,18 +147,15 @@ public:
     // For example, if BITS_PER_LEVEL is 2, and we have hashes 00, 10, and 11
     // already in this node, numberOfHashesAbove(00) would be 2, and
     // numberOfHashesAbove(10) would also be 2.
-    std::uint64_t numberOfHashesAbove(std::uint64_t hash) const;
+    uint64_t numberOfHashesAbove(uint64_t hash) const;
 
     // Efficiently test if the hash is in this node, looking only at the first
     // BITS_PER_LEVEL bits.
-    bool containsHash(std::uint64_t hash) const;
+    bool containsHash(uint64_t hash) const;
 
-    void markHash(std::uint64_t hash);
+    void markHash(uint64_t hash);
 
-    void unmarkHash(std::uint64_t hash);
-
-    // Creates an empty HamtNode.
-    explicit HamtNode();
+    void unmarkHash(uint64_t hash);
 
     void operator delete(void *p);
 
@@ -169,7 +174,7 @@ public:
     // and then subtract 1 since we see that the 0th (lowest) bit is set. To
     // get the index for 1, we right shift by 1 to get `110`, count the bits
     // to get 2, and don't subtract 1, since the bit is currently unset.
-    std::uint64_t map;
+    uint64_t map;
 
     // Sorted from high to low bits. So if the first six bits of a key are the
     // *highest* of the keys stored at this node, it will be *first* in this

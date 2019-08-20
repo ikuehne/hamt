@@ -59,8 +59,8 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
         } else {
             auto otherLeaf = entryToInsert->takeLeaf();
             assert((hash & FIRST_N_BITS) == (otherLeaf->hash & FIRST_N_BITS));
-            std::uint64_t nextKey = (hash >> BITS_PER_LEVEL) & FIRST_N_BITS;
-            std::uint64_t otherNextKey = (otherLeaf->hash >> BITS_PER_LEVEL)
+            uint64_t nextKey = (hash >> BITS_PER_LEVEL) & FIRST_N_BITS;
+            uint64_t otherNextKey = (otherLeaf->hash >> BITS_PER_LEVEL)
                                        & FIRST_N_BITS;
 
             if (hash == otherLeaf->hash) {
@@ -156,7 +156,7 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
     }
 }
 
-void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
+void deleteFromNode(HamtNodeEntry *entry, uint64_t hash) {
     assert(entry != NULL);
     assert(!entry->isNull());
 
@@ -181,7 +181,7 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
         // built in, that leaves nChildren - 2.
         size_t nBytes = sizeof(HamtNode)
                       + sizeof(HamtNodeEntry) * (nChildren - 2);
-        void *mem = calloc(nBytes, 1);
+        void *mem = malloc(nBytes);
         std::unique_ptr<HamtNode> newNode(
                 new (mem) HamtNode(std::move(node), hash));
 
@@ -192,7 +192,7 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
 bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
     HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
     HamtNodeEntry *entryToDeleteTo = entry;
-    std::uint64_t hashToDeleteTo = hash >> 6;
+    uint64_t hashToDeleteTo = hash >> 6;
 
     if (entry->isNull()) return false;
 
@@ -316,15 +316,11 @@ HamtNodeEntry::~HamtNodeEntry() {
 // HamtLeaf method definitions.
 //
 
-HamtLeaf::HamtLeaf(std::uint64_t hash): hash(hash), data() {}
+HamtLeaf::HamtLeaf(uint64_t hash): hash(hash), data() {}
 
 //////////////////////////////////////////////////////////////////////////////
 // HamtNode method definitions.
 //
-
-HamtNode::HamtNode(): map(0) {
-    children[0] = HamtNodeEntry();
-}
 
 HamtNode::HamtNode(uint64_t hash, HamtNodeEntry entry)
     : map(1ULL << (hash & FIRST_N_BITS))
@@ -333,7 +329,7 @@ HamtNode::HamtNode(uint64_t hash, HamtNodeEntry entry)
 }
 
 HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
-                   std::uint64_t hash) {
+                   uint64_t hash) {
     map = node->map;
     node->map = 0;
     unmarkHash(hash);
@@ -365,8 +361,8 @@ HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
 
 HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
                    std::unique_ptr<HamtLeaf> leaf,
-                   std::uint64_t hash) {
-    std::uint64_t nChildren = node->numberOfChildren();
+                   uint64_t hash) {
+    uint64_t nChildren = node->numberOfChildren();
     map = node->map;
     node->map = 0;
     assert(!containsHash(hash));
@@ -390,20 +386,20 @@ int HamtNode::numberOfChildren() const {
     return __builtin_popcountll((unsigned long long)map);
 }
 
-std::uint64_t HamtNode::numberOfHashesAbove(std::uint64_t hash) const {
-    std::uint64_t rest = map >> (hash & FIRST_N_BITS);
+uint64_t HamtNode::numberOfHashesAbove(uint64_t hash) const {
+    uint64_t rest = map >> (hash & FIRST_N_BITS);
     return __builtin_popcountll((unsigned long long)rest);
 }
 
-bool HamtNode::containsHash(std::uint64_t hash) const {
+bool HamtNode::containsHash(uint64_t hash) const {
     return (map & (1ULL << (hash & FIRST_N_BITS))) != 0;
 }
 
-void HamtNode::markHash(std::uint64_t hash) {
+void HamtNode::markHash(uint64_t hash) {
     map |= (1ULL << (hash & FIRST_N_BITS));
 }
 
-void HamtNode::unmarkHash(std::uint64_t hash) {
+void HamtNode::unmarkHash(uint64_t hash) {
     map &= ~(1ULL << (hash & FIRST_N_BITS));
 }
 
@@ -423,17 +419,17 @@ void HamtNode::operator delete(void *p) {
 //
 
 void Hamt::insert(std::string &&str) {
-    std::uint64_t hash = hasher(str);
+    uint64_t hash = hasher(str);
     root.insert(hash, std::move(str));
 }
 
 bool Hamt::lookup(const std::string &str) const {
-    std::uint64_t hash = hasher(str);
+    uint64_t hash = hasher(str);
     return root.lookup(hash, str);
 }
 
 bool Hamt::remove(const std::string &str) {
-    std::uint64_t hash = hasher(str);
+    uint64_t hash = hasher(str);
     return root.remove(hash, str);
 }
 
