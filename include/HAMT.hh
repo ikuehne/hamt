@@ -127,10 +127,10 @@ public:
     HamtNode(std::unique_ptr<HamtNode> node,
              uint64_t hash);
 
-    // Create a new HamtNode based on the given node, but with the given leaf
+    // Create a new HamtNode based on the given node, but with the given entry
     // and hash added (at the appropriate index).
     HamtNode(std::unique_ptr<HamtNode> node,
-             std::unique_ptr<HamtLeaf> leaf,
+             HamtNodeEntry entry,
              uint64_t hash);
 
     // Efficiently get the number of children of this node.

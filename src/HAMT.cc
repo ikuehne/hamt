@@ -50,7 +50,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
 
                 std::unique_ptr<HamtNode> newNode(
                         new (mem) HamtNode(std::move(nodeToInsert),
-                                           std::move(leaf),
+                                           HamtNodeEntry(std::move(leaf)),
                                            hash));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
@@ -325,7 +325,7 @@ HamtLeaf::HamtLeaf(uint64_t hash): hash(hash), data() {}
 HamtNode::HamtNode(uint64_t hash, HamtNodeEntry entry)
     : map(1ULL << (hash & FIRST_N_BITS))
 {
-    children[0] = std::move(entry);
+    new (&children[0]) HamtNodeEntry(std::move(entry));
 }
 
 HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
@@ -360,7 +360,7 @@ HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
 
 
 HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
-                   std::unique_ptr<HamtLeaf> leaf,
+                   HamtNodeEntry entry,
                    uint64_t hash) {
     uint64_t nChildren = node->numberOfChildren();
     map = node->map;
@@ -372,7 +372,7 @@ HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
                 &node->children[0],
                 idx * sizeof(HamtNodeEntry));
 
-    new (&children[idx]) HamtNodeEntry(std::move(leaf));
+    new (&children[idx]) HamtNodeEntry(std::move(entry));
 
     std::memcpy(&children[idx + 1],
                 &node->children[idx],
