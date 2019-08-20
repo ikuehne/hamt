@@ -182,32 +182,8 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
         size_t nBytes = sizeof(HamtNode)
                       + sizeof(HamtNodeEntry) * (nChildren - 2);
         void *mem = calloc(nBytes, 1);
-        std::unique_ptr<HamtNode> newNode(new (mem) HamtNode());
-        newNode->map = node->map;
-        node->map = 0;
-        newNode->unmarkHash(hash);
-        int idx = newNode->numberOfHashesAbove(hash);
-
-        // As with the corresponding junk in insert, measurements show that
-        // this is actually substantially faster than just moving the children
-        // one by one.
-
-        // memcpy and then zero out the bytes before the child we're deleting.
-        size_t firstHalfBytes = idx * sizeof(HamtNodeEntry);
-        std::memcpy(&newNode->children[0],
-                    &node->children[0],
-                    firstHalfBytes);
-        std::memset(&node->children[0], 0, firstHalfBytes);
-
-        // Delete the actual child we're looking at.
-        node->children[idx] = HamtNodeEntry();
-
-        // memcpy and then zero out the bytes after the child we're deleting.
-        size_t sndHalfBytes = (nChildren - 1 - idx) * sizeof(HamtNodeEntry);
-        std::memcpy(&newNode->children[idx],
-                    &node->children[idx + 1],
-                    sndHalfBytes);
-        std::memset(&node->children[0], 0, sndHalfBytes);
+        std::unique_ptr<HamtNode> newNode(
+                new (mem) HamtNode(std::move(node), hash));
 
         *entry = HamtNodeEntry(std::move(newNode));
     }
@@ -357,9 +333,40 @@ HamtNode::HamtNode(uint64_t hash, HamtNodeEntry entry)
 }
 
 HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
+                   std::uint64_t hash) {
+    map = node->map;
+    node->map = 0;
+    unmarkHash(hash);
+    int idx = numberOfHashesAbove(hash);
+    size_t nChildren = numberOfChildren();
+
+    // As with the corresponding constructor for insert, measurements show that
+    // this is actually substantially faster than just moving the children
+    // one by one.
+
+    // memcpy and then zero out the bytes before the child we're deleting.
+    size_t firstHalfBytes = idx * sizeof(HamtNodeEntry);
+    std::memcpy(&children[0],
+                &node->children[0],
+                firstHalfBytes);
+    std::memset(&node->children[0], 0, firstHalfBytes);
+
+    // Delete the actual child we're looking at.
+    node->children[idx] = HamtNodeEntry();
+
+    // memcpy and then zero out the bytes after the child we're deleting.
+    size_t sndHalfBytes = (nChildren - idx) * sizeof(HamtNodeEntry);
+    std::memcpy(&children[idx],
+                &node->children[idx + 1],
+                sndHalfBytes);
+    std::memset(&node->children[0], 0, sndHalfBytes);
+}
+
+
+HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
                    std::unique_ptr<HamtLeaf> leaf,
                    std::uint64_t hash) {
-    std::uint64_t nChildren = node->numberOfChildren() + 1;
+    std::uint64_t nChildren = node->numberOfChildren();
     map = node->map;
     node->map = 0;
     assert(!containsHash(hash));
@@ -373,10 +380,10 @@ HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
 
     std::memcpy(&children[idx + 1],
                 &node->children[idx],
-                (nChildren - idx - 1) * sizeof(HamtNodeEntry));
+                (nChildren - idx) * sizeof(HamtNodeEntry));
 
     std::memset(&node->children[0], 0,
-                sizeof(HamtNodeEntry) * (nChildren - 1));
+                sizeof(HamtNodeEntry) * nChildren);
 }
 
 int HamtNode::numberOfChildren() const {
