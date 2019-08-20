@@ -43,26 +43,32 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
             } else {
                 int nChildren = nodeToInsert->numberOfChildren() + 1;
                 int nExtraBytes = (nChildren - 1) * sizeof(HamtNodeEntry);
-                void *mem = calloc(sizeof(HamtNode) + nExtraBytes, 1);
+                void *mem = malloc(sizeof(HamtNode) + nExtraBytes);
                 std::unique_ptr<HamtNode> newNode(new (mem) HamtNode());
 
                 // We need to add a new child. Set the bit in the map:
                 newNode->map = nodeToInsert->map;
+                nodeToInsert->map = 0;
                 newNode->markHash(hash);
-
-                for (int i = 0; i < idx; ++i) {
-                    newNode->children[i] =
-                        std::move(nodeToInsert->children[i]);
-                }
 
                 auto leaf = std::make_unique<HamtLeaf>(hash);
                 leaf->data.push_back(std::move(str));
-                newNode->children[idx] = HamtNodeEntry(std::move(leaf));
 
-                for (int i = idx + 1; i < nChildren; ++i) {
-                    newNode->children[i] =
-                        std::move(nodeToInsert->children[i - 1]);
-                }
+                // This is obviously sketchy, but with GCC benchmarking shows
+                // it's vastly faster than copying the elements over one by
+                // one.
+                std::memcpy(&newNode->children[0],
+                            &nodeToInsert->children[0],
+                            idx * sizeof(HamtNodeEntry));
+
+                new (&newNode->children[idx]) HamtNodeEntry(std::move(leaf));
+
+                std::memcpy(&newNode->children[idx + 1],
+                            &nodeToInsert->children[idx],
+                            (nChildren - idx - 1) * sizeof(HamtNodeEntry));
+
+                std::memset(&nodeToInsert->children[0], 0,
+                            sizeof(HamtNodeEntry) * (nChildren - 1));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
                 return;
@@ -195,16 +201,30 @@ void deleteFromNode(HamtNodeEntry *entry, std::uint64_t hash) {
         void *mem = calloc(nBytes, 1);
         std::unique_ptr<HamtNode> newNode(new (mem) HamtNode());
         newNode->map = node->map;
+        node->map = 0;
         newNode->unmarkHash(hash);
         int idx = newNode->numberOfHashesAbove(hash);
 
-        for (int i = 0; i < idx; ++i) {
-            newNode->children[i] = std::move(node->children[i]);
-        }
+        // As with the corresponding junk in insert, measurements show that
+        // this is actually substantially faster than just moving the children
+        // one by one.
 
-        for (int i = idx + 1; i < nChildren; ++i) {
-            newNode->children[i - 1] = std::move(node->children[i]);
-        }
+        // memcpy and then zero out the bytes before the child we're deleting.
+        size_t firstHalfBytes = idx * sizeof(HamtNodeEntry);
+        std::memcpy(&newNode->children[0],
+                    &node->children[0],
+                    firstHalfBytes);
+        std::memset(&node->children[0], 0, firstHalfBytes);
+
+        // Delete the actual child we're looking at.
+        node->children[idx] = HamtNodeEntry();
+
+        // memcpy and then zero out the bytes after the child we're deleting.
+        size_t sndHalfBytes = (nChildren - 1 - idx) * sizeof(HamtNodeEntry);
+        std::memcpy(&newNode->children[idx],
+                    &node->children[idx + 1],
+                    sndHalfBytes);
+        std::memset(&node->children[0], 0, sndHalfBytes);
 
         *entry = HamtNodeEntry(std::move(newNode));
     }
