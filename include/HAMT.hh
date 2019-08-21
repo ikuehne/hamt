@@ -18,6 +18,11 @@ const uint64_t FIRST_N_BITS = (1ULL << BITS_PER_LEVEL) - 1;
 // (Exclusive) maximum value we can index a node with.
 const uint64_t MAX_IDX = 1ULL << BITS_PER_LEVEL;
 
+const uint64_t BITS_PER_HASH = 64;
+const uint64_t LEVELS_PER_HASH = (BITS_PER_HASH + (BITS_PER_LEVEL - 1))
+                               / BITS_PER_LEVEL;
+
+
 static_assert(MAX_IDX <= 64, "2^MAX_IDX - 1 must fit within a 64-bit word");
 
 //////////////////////////////////////////////////////////////////////////////
@@ -94,20 +99,14 @@ private:
 // see below.
 class HamtLeaf {
 public:
-    // Construct a new HamtLeaf with the given hash and no keys.
-    //
-    // See below for the nature of the hash.
-    explicit HamtLeaf(uint64_t hash);
 
-    // The hash, shifted to reflect the level this leaf is at.
-    //
-    // For example, if this HamtLeaf is one of the children of the root of the
-    // HAMT, the full 64 bit hash would be here; if it was one level down, it
-    // would be shifted BITS_PER_LEVEL bits to the right.
-    uint64_t hash;
+    // Construct a new HamtLeaf with the given key.
+    explicit HamtLeaf(std::string data, std::uint64_t hash);
 
-    // The keys stored at this node, in the order they were inserted.
-    std::vector<std::string> data;
+    // The key stored at this node.
+    std::string data;
+
+    std::uint64_t hash;
 };
 
 // A node containing a sub-table.
