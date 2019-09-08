@@ -17,19 +17,25 @@ def wrapCommand(cmd):
         sys.stderr.write(f"{cmd[0]} failed. Aborting.\n")
         exit(ret)
 
-def main():
-    if not os.path.exists("build"):
-        os.mkdir("build")
-    os.chdir("build")
+def runWithFlags(flags):
     # -DCMAKE_EXPORT... tells cmake to generate a clang compilation database for
     # tooling.
-    wrapCommand(["cmake", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON", ".."])
+    wrapCommand(["cmake", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                          f"-DCMAKE_CXX_FLAGS={','.join(flags)}",
+                          ".."])
     # Put the clang DB at the project directory so tools can find it.
     os.rename(CLANG_DB_NAME, f"../{CLANG_DB_NAME}")
 
     wrapCommand(["make"])
     wrapCommand(["./test"])
     wrapCommand(["valgrind", "./test"])
+
+def main():
+    if not os.path.exists("build"):
+        os.mkdir("build")
+    os.chdir("build")
+    runWithFlags([])
+    # runWithFlags(["-DTEST_HASH"])
 
 if __name__ == "__main__":
     main()

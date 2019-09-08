@@ -18,7 +18,9 @@ std::string random_string()
     int length = generator() % 256;
     auto str = std::string(length,0);
 
-    std::generate_n(str.begin(), length, generator);
+    std::generate_n(str.begin(), length, []() {
+        return static_cast<char>(generator() % (126 - 32) + 32);
+    });
 
     return str;
 }
@@ -99,11 +101,11 @@ void runTest(int size) {
 }
 
 int main(void) {
+    runTest(1);
     runTest(2);
     runTest(10);
     runTest(100);
     runTest(1000);
     runTest(10000);
-    runTest(100000);
     return 0;
 }
