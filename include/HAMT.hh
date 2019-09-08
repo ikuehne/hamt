@@ -225,5 +225,9 @@ public:
 
 private:
     TopLevelHamtNode root;
+#ifdef TEST_HASH
+    std::uint64_t hasher(const std::string &) const { return 0; }
+#else
     std::hash<std::string> hasher;
+#endif
 };

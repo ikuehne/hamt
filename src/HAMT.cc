@@ -18,6 +18,10 @@
 #define LIKELY(condition) __builtin_expect(static_cast<bool>(condition), 1)
 #define UNLIKELY(condition) __builtin_expect(static_cast<bool>(condition), 0)
 
+//////////////////////////////////////////////////////////////////////////////
+// Hash definitions.
+//
+
 // Get a "backup hash" to resolve collisions.
 //
 // The parameter gives how many backup hashes have already been used
@@ -39,7 +43,7 @@
 // key. 
 uint64_t getNthBackup(const std::string &str, unsigned n)  {
     std::uint64_t result = 0;
-    bool pastEnd;
+    bool pastEnd = false;
     for (size_t idx = 7 * n; idx < 7 * n + 7; ++idx) {
         if (idx < str.size()) {
             result |= (std::uint64_t)((std::uint8_t)str[idx]);
@@ -57,6 +61,7 @@ uint64_t getNthBackup(const std::string &str, unsigned n)  {
 //////////////////////////////////////////////////////////////////////////////
 // TopLevelHamtNode method definitions.
 //
+
 
 void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
     HamtNodeEntry *entryToInsert = &table[hash & FIRST_N_BITS];
@@ -101,17 +106,36 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
         } else {
             auto otherLeaf = entryToInsert->takeLeaf();
             assert((hash & FIRST_N_BITS) == (otherLeaf->hash & FIRST_N_BITS));
-            uint64_t nextKey = (hash >> BITS_PER_LEVEL) & FIRST_N_BITS;
-            uint64_t otherNextKey = (otherLeaf->hash >> BITS_PER_LEVEL)
-                                       & FIRST_N_BITS;
+
+            uint64_t nextHash, nextKey;
+            uint64_t otherNextHash, otherNextKey;
+            if (UNLIKELY(level + 1 >= LEVELS_PER_HASH)
+             && ((level + 1) % LEVELS_PER_HASH) == 0) {
+                nextHash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
+                otherNextHash = getNthBackup(otherLeaf->data,
+                                             level / LEVELS_PER_HASH - 1);
+            } else {
+                nextHash = hash >> BITS_PER_LEVEL;
+                otherNextHash = otherLeaf->hash >> BITS_PER_LEVEL;
+            }
+
+            nextKey = nextHash & FIRST_N_BITS;
+            otherNextKey = otherNextHash & FIRST_N_BITS;
 
             if (hash == otherLeaf->hash && str == otherLeaf->data) {
                 *entryToInsert = HamtNodeEntry(std::move(otherLeaf));
                 return;
             } else if (nextKey != otherNextKey) {
-                otherLeaf->hash >>= BITS_PER_LEVEL;
-                hash >>= BITS_PER_LEVEL;
+                otherLeaf->hash = otherNextHash;
+                hash = nextHash;
                 auto otherHash = otherLeaf->hash;
+
+                if (UNLIKELY(level + 1 >= LEVELS_PER_HASH)
+                 && ((level + 1) % LEVELS_PER_HASH) == 0) {
+                    hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
+                    otherHash = getNthBackup(otherLeaf->data,
+                                             level / LEVELS_PER_HASH - 1);
+                }
 
                 // We know the first child will be a leaf containing the key
                 // we're inserting. Create that leaf:
@@ -126,7 +150,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
 
                 return;
             } else {
-                otherLeaf->hash >>= BITS_PER_LEVEL;
+                otherLeaf->hash = otherNextHash;
 
                 std::unique_ptr<HamtNode> newNode(
                         new (1) HamtNode(otherLeaf->hash,
@@ -141,6 +165,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
 
 bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
     const HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
+    hash >>= BITS_PER_LEVEL;
     unsigned level = 0;
 
     if (entry->isNull()) return false;
@@ -150,7 +175,6 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
             const HamtLeaf &leaf = entry->getLeaf();
             return leaf.data == str;
         } else {
-            hash >>= BITS_PER_LEVEL;
             const HamtNode &node = entry->getChild();
 
             if (!node.containsHash(hash)) {
@@ -159,6 +183,8 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
 
             entry = &node.children[node.numberOfHashesAbove(hash) - 1];
             level++;
+            hash >>= BITS_PER_LEVEL;
+
             if (UNLIKELY(level >= LEVELS_PER_HASH)
              && (level % LEVELS_PER_HASH) == 0) {
                 hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
