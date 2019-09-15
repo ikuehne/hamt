@@ -213,7 +213,15 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
     if (entry->isNull()) return false;
 
     while (true) {
-        hash >>= 6;
+        level++;
+
+        if (UNLIKELY(level >= LEVELS_PER_HASH)
+         && (level % LEVELS_PER_HASH) == 0) {
+            hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
+        } else {
+            hash >>= BITS_PER_LEVEL;
+        }
+
         if (entry->isLeaf()) {
             auto &leaf = entry->getLeaf();
 
@@ -236,11 +244,6 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
 
             entry = &node.children[node.numberOfHashesAbove(hash) - 1];
 
-            level++;
-            if (UNLIKELY(level >= LEVELS_PER_HASH)
-             && (level % LEVELS_PER_HASH) == 0) {
-                hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
-            }
         }
     }
 }

@@ -35,7 +35,7 @@ def main():
         os.mkdir("build")
     os.chdir("build")
     runWithFlags([])
-    # runWithFlags(["-DTEST_HASH"])
+    runWithFlags(["-DTEST_HASH"])
 
 if __name__ == "__main__":
     main()
