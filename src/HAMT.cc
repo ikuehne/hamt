@@ -37,12 +37,13 @@
 //     - Each byte from the string maps to two bytes in the "hash"; the first
 //       is from the string, and the second is 1 if we've passed the end of the
 //       string and 0 otherwise.
-// Since we use up 7 bytes per iteration of this procedure, we'll separate
+// Since we use up 4 bytes per iteration of this procedure, we'll separate
 // the key from any different in time and space linear in the size of the
 // key. 
 uint64_t getNthBackup(const std::string &str, unsigned n)  {
     std::uint64_t result = 0;
     uint8_t *bytes = (uint8_t *)&result;
+
     for (size_t i = 0; i < 4; i++) {
         size_t idx = i + 4 * n;
         if (idx < str.size()) {
@@ -58,17 +59,6 @@ uint64_t getNthBackup(const std::string &str, unsigned n)  {
 //////////////////////////////////////////////////////////////////////////////
 // TopLevelHamtNode method definitions.
 //
-
-inline bool equal(const std::string &l, const std::string &r) {
-    if (l.size() != r.size()) return false;
-
-    for (size_t i = 0; i < l.size(); ++i) {
-        if (l[i] != r[i]) return false;
-    }
-
-    return true;
-}
-
 
 void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
     HamtNodeEntry *entryToInsert = &table[hash & FIRST_N_BITS];
@@ -129,7 +119,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
             auto otherLeaf = entryToInsert->takeLeaf();
             auto otherHash = otherLeaf->hash;
 
-            if (lastHash == otherHash && equal(str, otherLeaf->data)) {
+            if (lastHash == otherHash && str == otherLeaf->data) {
                 *entryToInsert = HamtNodeEntry(std::move(otherLeaf));
                 return;
             }
@@ -157,6 +147,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
 
 bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
     const HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
+    uint64_t lastHash = hash;
     hash >>= BITS_PER_LEVEL;
     unsigned level = 1;
 
@@ -164,7 +155,8 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
 
     while (true) {
         if (entry->isLeaf()) {
-            return entry->getLeaf().data == str;
+            auto leaf = entry->getLeaf();
+            return leaf.hash == lastHash && leaf.data == str;
         } else {
             const HamtNode &node = entry->getChild();
 
@@ -173,12 +165,15 @@ bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
             }
 
             entry = &node.children[node.numberOfHashesAbove(hash) - 1];
-            level++;
-            hash >>= BITS_PER_LEVEL;
 
+            lastHash = hash;
+
+            level++;
             if (UNLIKELY(level >= LEVELS_PER_HASH)
              && (level % LEVELS_PER_HASH) == 0) {
                 hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
+            } else {
+                hash >>= BITS_PER_LEVEL;
             }
             continue;
         }
@@ -222,6 +217,7 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
     while (true) {
         level++;
 
+        uint64_t lastHash = hash;
         if (UNLIKELY(level >= LEVELS_PER_HASH)
          && (level % LEVELS_PER_HASH) == 0) {
             hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
@@ -232,7 +228,7 @@ bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
         if (entry->isLeaf()) {
             auto &leaf = entry->getLeaf();
 
-            if (leaf.data == str) {
+            if (lastHash == leaf.hash && leaf.data == str) {
                 deleteFromNode(entryToDeleteTo, hashToDeleteTo);
                 return true;
             }
