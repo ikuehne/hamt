@@ -73,9 +73,11 @@ void benchmarkHamt() {
 
     Hamt hamt;
 
+    int i = 0;
     auto stringsToAddCopy = stringsToAdd;
     auto iter = stringsToAddCopy.begin();
     benchmark("Random string insertion", stringsToAdd.size(), [&]() -> void {
+        i++;
         hamt.insert(std::move(*iter));
         iter++;
     });

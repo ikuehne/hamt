@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import os
+import shutil
 import subprocess
 import sys
 
@@ -31,8 +32,9 @@ def runWithFlags(flags):
     wrapCommand(["valgrind", "./test"])
 
 def main():
-    if not os.path.exists("build"):
-        os.mkdir("build")
+    if os.path.exists("build"):
+        shutil.rmtree("build")
+    os.mkdir("build")
     os.chdir("build")
     runWithFlags([])
     runWithFlags(["-DTEST_HASH"])

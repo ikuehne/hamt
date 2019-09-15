@@ -33,27 +33,24 @@
 // get keys that will guarantee a separation in a number of steps linear
 // in the size of the key (what hash tables conventionally call "constant
 // time"):
-//     - The high seven bytes of the result are bytes 7n through 7n + 7 of
-//       the string. If that goes past the end of the string, they get 0
-//       instead.
-//     - The low byte is 1 if we've passed the end of the string, 0
-//       otherwise.
+//     - At each level of hashing, we take four more bytes off the string.
+//     - Each byte from the string maps to two bytes in the "hash"; the first
+//       is from the string, and the second is 1 if we've passed the end of the
+//       string and 0 otherwise.
 // Since we use up 7 bytes per iteration of this procedure, we'll separate
 // the key from any different in time and space linear in the size of the
 // key. 
 uint64_t getNthBackup(const std::string &str, unsigned n)  {
     std::uint64_t result = 0;
-    bool pastEnd = false;
-    for (size_t idx = 7 * n; idx < 7 * n + 7; ++idx) {
+    uint8_t *bytes = (uint8_t *)&result;
+    for (size_t i = 0; i < 4; i++) {
+        size_t idx = i + 4 * n;
         if (idx < str.size()) {
-            result |= (std::uint64_t)((std::uint8_t)str[idx]);
+            bytes[2 * i] = str[idx];
         } else {
-            pastEnd = true;
+            bytes[2 * i + 1] = 1;
         }
-        result <<= 8;
     }
-
-    if (pastEnd) result |= 1;
 
     return result;
 }
@@ -61,6 +58,16 @@ uint64_t getNthBackup(const std::string &str, unsigned n)  {
 //////////////////////////////////////////////////////////////////////////////
 // TopLevelHamtNode method definitions.
 //
+
+inline bool equal(const std::string &l, const std::string &r) {
+    if (l.size() != r.size()) return false;
+
+    for (size_t i = 0; i < l.size(); ++i) {
+        if (l[i] != r[i]) return false;
+    }
+
+    return true;
+}
 
 
 void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
@@ -122,7 +129,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
             auto otherLeaf = entryToInsert->takeLeaf();
             auto otherHash = otherLeaf->hash;
 
-            if (lastHash == otherHash && str == otherLeaf->data) {
+            if (lastHash == otherHash && equal(str, otherLeaf->data)) {
                 *entryToInsert = HamtNodeEntry(std::move(otherLeaf));
                 return;
             }

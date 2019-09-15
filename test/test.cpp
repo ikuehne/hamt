@@ -11,6 +11,10 @@ void die() {
     exit(1);
 }
 
+void require(bool b) {
+    if (!b) die();
+}
+
 static auto generator = std::mt19937();
 
 std::string random_string()
@@ -63,14 +67,14 @@ void runTest(int size) {
 
     for (const auto &str: stringsToAdd) {
         i++;
-        if (!hamt.lookup(str)) die();
+        require(hamt.lookup(str));
     }
 
     i = 0;
     for (const auto &str: stringsNotToAdd) {
         i++;
-        if (hamt.lookup(str)) die();
-        if (hamt.remove(str)) die();
+        require(!hamt.lookup(str));
+        require(!hamt.remove(str));
     }
 
     i = 0;
@@ -80,7 +84,7 @@ void runTest(int size) {
          str < stringsToAdd.begin() + stringsToAdd.size() / 2;
          str++) {
         i++;
-        if (!hamt.remove(*str)) die();
+        require(hamt.remove(*str));
     }
 
     i = 0;
@@ -88,7 +92,7 @@ void runTest(int size) {
          str < stringsToAdd.begin() + stringsToAdd.size() / 2;
          str++) {
         i++;
-        if (hamt.lookup(*str)) die();
+        require(!hamt.lookup(*str));
     }
 
     i = 0;
@@ -96,8 +100,19 @@ void runTest(int size) {
          str < stringsToAdd.end();
          str++) {
         i++;
-        if (!hamt.lookup(*str)) die();
+        require(hamt.lookup(*str));
     }
+}
+
+void collision() {
+    Hamt hamt;
+
+    hamt.insert("\235");
+    hamt.insert("\235\000");
+
+    hamt.insert("aaa");
+    hamt.insert("aaa");
+    require(hamt.lookup("aaa"));
 }
 
 int main(void) {
@@ -107,5 +122,6 @@ int main(void) {
     runTest(100);
     runTest(1000);
     runTest(10000);
+    collision();
     return 0;
 }

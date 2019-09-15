@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import os
+import shutil
 import subprocess
 import sys
 
@@ -18,8 +19,9 @@ def wrapCommand(cmd):
         exit(ret)
 
 def main():
-    if not os.path.exists("build"):
-        os.mkdir("build")
+    if os.path.exists("build"):
+        shutil.rmtree("build")
+    os.mkdir("build")
     os.chdir("build")
     # -DCMAKE_EXPORT... tells cmake to generate a clang compilation database for
     # tooling.
