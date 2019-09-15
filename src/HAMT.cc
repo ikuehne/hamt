@@ -73,30 +73,45 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
         return;
     }
 
+    // Some loop invariants:
+    //
+    // - level is equal to the level entryToInsert is at, starting at 0 if it
+    //   is in the top-level node.
+    // - hash has been advanced `level` times.
+    // - entryToInsert is the entry in which `str` belongs.
+    //
     while (true) {
 
-        if (!entryToInsert->isLeaf()) {
-            hash >>= BITS_PER_LEVEL;
-            auto nodeToInsert = entryToInsert->takeChild();
-            int idx = nodeToInsert->numberOfHashesAbove(hash);
+        unsigned lastLevel = level;
+        uint64_t lastHash = hash;
+        level++;
 
-            if (nodeToInsert->containsHash(hash)) {
-                auto nextEntry = &nodeToInsert->children[idx - 1];
-                *entryToInsert = HamtNodeEntry(std::move(nodeToInsert));
+        if (UNLIKELY(level >= LEVELS_PER_HASH)
+         && (level % LEVELS_PER_HASH) == 0) {
+            hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
+        } else {
+            hash >>= BITS_PER_LEVEL;
+        }
+
+        if (!entryToInsert->isLeaf()) {
+            auto nodeToInsertAt = entryToInsert->takeChild();
+            int idx = nodeToInsertAt->numberOfHashesAbove(hash);
+
+            // If there's already a child here, move into that child.
+            if (nodeToInsertAt->containsHash(hash)) {
+                auto nextEntry = &nodeToInsertAt->children[idx - 1];
+                *entryToInsert = HamtNodeEntry(std::move(nodeToInsertAt));
                 entryToInsert = nextEntry;
-                level++;
-                if (UNLIKELY(level >= LEVELS_PER_HASH)
-                 && (level % LEVELS_PER_HASH) == 0) {
-                    hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
-                }
                 continue;
+            // If there's not, allocate a new node with space for one more
+            // child.
             } else {
-                int nChildren = nodeToInsert->numberOfChildren() + 1;
+                int nChildren = nodeToInsertAt->numberOfChildren() + 1;
 
                 auto leaf = std::make_unique<HamtLeaf>(std::move(str), hash);
 
                 std::unique_ptr<HamtNode> newNode(
-                        new (nChildren) HamtNode(std::move(nodeToInsert),
+                        new (nChildren) HamtNode(std::move(nodeToInsertAt),
                                                  HamtNodeEntry(std::move(leaf)),
                                                  hash));
 
@@ -105,60 +120,30 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
             }
         } else {
             auto otherLeaf = entryToInsert->takeLeaf();
-            assert((hash & FIRST_N_BITS) == (otherLeaf->hash & FIRST_N_BITS));
+            auto otherHash = otherLeaf->hash;
 
-            uint64_t nextHash, nextKey;
-            uint64_t otherNextHash, otherNextKey;
-            if (UNLIKELY(level + 1 >= LEVELS_PER_HASH)
-             && ((level + 1) % LEVELS_PER_HASH) == 0) {
-                nextHash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
-                otherNextHash = getNthBackup(otherLeaf->data,
-                                             level / LEVELS_PER_HASH - 1);
-            } else {
-                nextHash = hash >> BITS_PER_LEVEL;
-                otherNextHash = otherLeaf->hash >> BITS_PER_LEVEL;
-            }
-
-            nextKey = nextHash & FIRST_N_BITS;
-            otherNextKey = otherNextHash & FIRST_N_BITS;
-
-            if (hash == otherLeaf->hash && str == otherLeaf->data) {
+            if (lastHash == otherHash && str == otherLeaf->data) {
                 *entryToInsert = HamtNodeEntry(std::move(otherLeaf));
                 return;
-            } else if (nextKey != otherNextKey) {
-                otherLeaf->hash = otherNextHash;
-                hash = nextHash;
-                auto otherHash = otherLeaf->hash;
-
-                if (UNLIKELY(level + 1 >= LEVELS_PER_HASH)
-                 && ((level + 1) % LEVELS_PER_HASH) == 0) {
-                    hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
-                    otherHash = getNthBackup(otherLeaf->data,
-                                             level / LEVELS_PER_HASH - 1);
-                }
-
-                // We know the first child will be a leaf containing the key
-                // we're inserting. Create that leaf:
-                auto leaf = std::make_unique<HamtLeaf>(std::move(str), hash);
-
-                // And make a new node with that leaf, plus space for one more:
-                std::unique_ptr<HamtNode> newNode(
-                        new (2) HamtNode(hash, HamtNodeEntry(std::move(leaf)),
-                                         otherHash, HamtNodeEntry(std::move(otherLeaf))));
-
-                *entryToInsert = HamtNodeEntry(std::move(newNode));
-
-                return;
-            } else {
-                otherLeaf->hash = otherNextHash;
-
-                std::unique_ptr<HamtNode> newNode(
-                        new (1) HamtNode(otherLeaf->hash,
-                                         HamtNodeEntry(std::move(otherLeaf))));
-
-                *entryToInsert = HamtNodeEntry(std::move(newNode));
-                continue;
             }
+
+            if (UNLIKELY(level >= LEVELS_PER_HASH)
+             && (level % LEVELS_PER_HASH) == 0) {
+                otherHash = getNthBackup(otherLeaf->data,
+                                         level / LEVELS_PER_HASH - 1);
+            } else {
+                otherHash >>= BITS_PER_LEVEL;
+            }
+            otherLeaf->hash = otherHash;
+
+            std::unique_ptr<HamtNode> newNode(
+                    new (1) HamtNode(otherHash,
+                                     HamtNodeEntry(std::move(otherLeaf))));
+
+            *entryToInsert = HamtNodeEntry(std::move(newNode));
+            hash = lastHash;
+            level = lastLevel;
+            continue;
         }
     }
 }
@@ -166,14 +151,13 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
 bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
     const HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
     hash >>= BITS_PER_LEVEL;
-    unsigned level = 0;
+    unsigned level = 1;
 
     if (entry->isNull()) return false;
 
     while (true) {
         if (entry->isLeaf()) {
-            const HamtLeaf &leaf = entry->getLeaf();
-            return leaf.data == str;
+            return entry->getLeaf().data == str;
         } else {
             const HamtNode &node = entry->getChild();
 
