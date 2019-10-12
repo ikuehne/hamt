@@ -10,18 +10,17 @@
 //
 
 // The number of bits we use to index into each level of the trie.
-const uint64_t BITS_PER_LEVEL = 6;
+inline constexpr uint64_t BITS_PER_LEVEL = 6;
 
 // A mask to take those bits off.
-const uint64_t FIRST_N_BITS = (1ULL << BITS_PER_LEVEL) - 1;
+inline constexpr uint64_t FIRST_N_BITS = (1ULL << BITS_PER_LEVEL) - 1;
 
 // (Exclusive) maximum value we can index a node with.
-const uint64_t MAX_IDX = 1ULL << BITS_PER_LEVEL;
+inline constexpr uint64_t MAX_IDX = 1ULL << BITS_PER_LEVEL;
 
-const uint64_t BITS_PER_HASH = 64;
-const uint64_t LEVELS_PER_HASH = (BITS_PER_HASH + (BITS_PER_LEVEL - 1))
-                               / BITS_PER_LEVEL;
-
+inline constexpr uint64_t BITS_PER_HASH = 64;
+inline constexpr uint64_t LEVELS_PER_HASH =
+    (BITS_PER_HASH + (BITS_PER_LEVEL - 1)) / BITS_PER_LEVEL;
 
 static_assert(MAX_IDX <= 64, "2^MAX_IDX - 1 must fit within a 64-bit word");
 
@@ -45,7 +44,7 @@ class Hamt;
 // using the pointer's low bit.
 //
 class HamtNodeEntry {
-public:
+  public:
     explicit HamtNodeEntry(std::unique_ptr<HamtNode> node);
 
     explicit HamtNodeEntry(std::unique_ptr<HamtLeaf> leaf);
@@ -86,7 +85,7 @@ public:
     HamtLeaf &getLeaf();
     const HamtLeaf &getLeaf() const;
 
-private:
+  private:
     // 0 for NULL. The low bit is set if this points to a leaf.
     // Otherwise, it points to a node.
     uintptr_t ptr;
@@ -98,8 +97,7 @@ private:
 // Additionally stores a shifted hash to avoid recomputing the hash on inserts;
 // see below.
 class HamtLeaf {
-public:
-
+  public:
     // Construct a new HamtLeaf with the given key.
     explicit HamtLeaf(std::string data, std::uint64_t hash);
 
@@ -117,23 +115,21 @@ public:
 // massive pain that we suffer for the sake of cache performance and
 // compactness). Thus instances should *never* be allocated with `new`.
 class HamtNode {
-public:
+  public:
     // Create a new HamtNode with the given entry at the given hash.
     HamtNode(uint64_t hash, HamtNodeEntry entry);
 
     // Create a new HamtNode with the given entry at the given hash.
-    HamtNode(uint64_t hash1, HamtNodeEntry entry1,
-             uint64_t hash2, HamtNodeEntry entry2);
+    HamtNode(uint64_t hash1, HamtNodeEntry entry1, uint64_t hash2,
+             HamtNodeEntry entry2);
 
     // Create a new HamtNode based on the given node, but with the entry at
     // the given hash removed.
-    HamtNode(std::unique_ptr<HamtNode> node,
-             uint64_t hash);
+    HamtNode(std::unique_ptr<HamtNode> node, uint64_t hash);
 
     // Create a new HamtNode based on the given node, but with the given entry
     // and hash added (at the appropriate index).
-    HamtNode(std::unique_ptr<HamtNode> node,
-             HamtNodeEntry entry,
+    HamtNode(std::unique_ptr<HamtNode> node, HamtNodeEntry entry,
              uint64_t hash);
 
     // Efficiently get the number of children of this node.
@@ -195,20 +191,20 @@ public:
 // pretty quickly anyway, so we spare the space, and this way avoid a bit of
 // fiddling with the bitmap.
 class TopLevelHamtNode {
-public:
+  public:
     void insert(uint64_t hash, std::string &&str);
 
     bool find(uint64_t hash, const std::string &str) const;
 
     bool erase(uint64_t hash, const std::string &str);
 
-private:
+  private:
     HamtNodeEntry table[MAX_IDX];
 };
 
 // The HAMT itself. Users should only use this interface.
 class Hamt {
-public:
+  public:
     // Initialize an empty HAMT.
     Hamt() = default;
 
@@ -223,7 +219,7 @@ public:
     // Return whether the string was found.
     bool erase(const std::string &str);
 
-private:
+  private:
     TopLevelHamtNode root;
 #ifdef TEST_HASH
     std::uint64_t hasher(const std::string &) const { return 0; }

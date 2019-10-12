@@ -3,8 +3,7 @@
 #include "HAMT.hh"
 #include "bench.hh"
 
-template<typename Set>
-void benchmark() {
+template <typename Set> void benchmark() {
     std::unordered_set<std::string> setOfStringsToAdd;
     std::vector<std::string> stringsToAdd;
 
@@ -44,9 +43,9 @@ void benchmark() {
     iter = stringsNotToAdd.begin();
     benchmark("Unsuccessful string lookup", stringsNotToAdd.size(),
               [&]() -> void {
-        set.find(*iter);
-        iter++;
-    });
+                  set.find(*iter);
+                  iter++;
+              });
 
     iter = stringsToAdd.begin();
     benchmark("Successful string lookup", stringsToAdd.size(), [&]() -> void {
@@ -54,37 +53,36 @@ void benchmark() {
         iter++;
     });
 
-    std::random_shuffle(stringsToAdd.begin(),    stringsToAdd.end());
+    std::random_shuffle(stringsToAdd.begin(), stringsToAdd.end());
     std::random_shuffle(stringsNotToAdd.begin(), stringsNotToAdd.end());
 
     iter = stringsNotToAdd.begin();
-    benchmark("Unsuccessful string lookup (shuffled)",
-              stringsNotToAdd.size(),
+    benchmark("Unsuccessful string lookup (shuffled)", stringsNotToAdd.size(),
               [&]() -> void {
-        set.find(*iter);
-        iter++;
-    });
+                  set.find(*iter);
+                  iter++;
+              });
 
     iter = stringsToAdd.begin();
-    benchmark("Successful string lookup (shuffled)",
-              stringsToAdd.size(), [&]() -> void {
-        set.find(*iter);
-        iter++;
-    });
+    benchmark("Successful string lookup (shuffled)", stringsToAdd.size(),
+              [&]() -> void {
+                  set.find(*iter);
+                  iter++;
+              });
 
     iter = stringsNotToAdd.begin();
     benchmark("Unsuccessful string deletion (shuffled)",
               stringsNotToAdd.size() / 2, [&]() -> void {
-        set.erase(*iter);
-        iter++;
-    });
+                  set.erase(*iter);
+                  iter++;
+              });
 
     iter = stringsToAdd.begin();
-    benchmark("Successful string deletion (shuffled)",
-              stringsToAdd.size() / 2, [&]() -> void {
-        set.erase(*iter);
-        iter++;
-    });
+    benchmark("Successful string deletion (shuffled)", stringsToAdd.size() / 2,
+              [&]() -> void {
+                  set.erase(*iter);
+                  iter++;
+              });
 }
 
 int main(void) {

@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <iostream>
-#include <random>
 #include <memory>
+#include <random>
 #include <unordered_set>
 
 #include "HAMT.hh"
@@ -12,15 +12,15 @@ void die() {
 }
 
 void require(bool b) {
-    if (!b) die();
+    if (!b)
+        die();
 }
 
 static auto generator = std::mt19937();
 
-std::string random_string()
-{
+std::string random_string() {
     int length = generator() % 256;
-    auto str = std::string(length,0);
+    auto str = std::string(length, 0);
 
     std::generate_n(str.begin(), length, []() {
         return static_cast<char>(generator() % (126 - 32) + 32);
@@ -57,7 +57,7 @@ void runTest(int size) {
     int i = 0;
 
     std::vector<std::string> stringsToAddCopy = stringsToAdd;
-    for (auto str: stringsToAddCopy) {
+    for (auto str : stringsToAddCopy) {
         i++;
         hamt.insert(std::move(str));
     }
@@ -65,13 +65,13 @@ void runTest(int size) {
     i = 0;
     std::random_shuffle(stringsToAdd.begin(), stringsToAdd.end());
 
-    for (const auto &str: stringsToAdd) {
+    for (const auto &str : stringsToAdd) {
         i++;
         require(hamt.find(str));
     }
 
     i = 0;
-    for (const auto &str: stringsNotToAdd) {
+    for (const auto &str : stringsNotToAdd) {
         i++;
         require(!hamt.find(str));
         require(!hamt.erase(str));
@@ -81,24 +81,21 @@ void runTest(int size) {
     std::random_shuffle(stringsToAdd.begin(), stringsToAdd.end());
 
     for (auto str = stringsToAdd.begin();
-         str < stringsToAdd.begin() + stringsToAdd.size() / 2;
-         str++) {
+         str < stringsToAdd.begin() + stringsToAdd.size() / 2; str++) {
         i++;
         require(hamt.erase(*str));
     }
 
     i = 0;
     for (auto str = stringsToAdd.begin();
-         str < stringsToAdd.begin() + stringsToAdd.size() / 2;
-         str++) {
+         str < stringsToAdd.begin() + stringsToAdd.size() / 2; str++) {
         i++;
         require(!hamt.find(*str));
     }
 
     i = 0;
     for (auto str = stringsToAdd.begin() + stringsToAdd.size() / 2;
-         str < stringsToAdd.end();
-         str++) {
+         str < stringsToAdd.end(); str++) {
         i++;
         require(hamt.find(*str));
     }

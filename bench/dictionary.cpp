@@ -1,8 +1,8 @@
 #include <fstream>
 #include <unordered_set>
 
-#include "bench.hh"
 #include "HAMT.hh"
+#include "bench.hh"
 
 std::vector<std::string> readDictionary() {
     std::ifstream dict("/usr/share/dict/american-english");
@@ -13,13 +13,12 @@ std::vector<std::string> readDictionary() {
         result.push_back(std::move(word));
     }
 
-    std::random_shuffle(result.begin(),    result.end());
+    std::random_shuffle(result.begin(), result.end());
 
     return result;
 }
 
-template<typename Set>
-void benchmark(const std::vector<std::string> &dict) {
+template <typename Set> void benchmark(const std::vector<std::string> &dict) {
     Set set;
 
     auto dictCopy = dict;

@@ -11,7 +11,7 @@
 // warning.
 #ifdef __GNUC__
 #ifndef __clang__
-    #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
 #endif
 #endif
 
@@ -39,8 +39,8 @@
 //       string and 0 otherwise.
 // Since we use up 4 bytes per iteration of this procedure, we'll separate
 // the key from any different in time and space linear in the size of the
-// key. 
-uint64_t getNthBackup(const std::string &str, unsigned n)  {
+// key.
+uint64_t getNthBackup(const std::string &str, unsigned n) {
     std::uint64_t result = 0;
     uint8_t *bytes = (uint8_t *)&result;
 
@@ -83,8 +83,8 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
         uint64_t lastHash = hash;
         level++;
 
-        if (UNLIKELY(level >= LEVELS_PER_HASH)
-         && (level % LEVELS_PER_HASH) == 0) {
+        if (UNLIKELY(level >= LEVELS_PER_HASH) &&
+            (level % LEVELS_PER_HASH) == 0) {
             hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
         } else {
             hash >>= BITS_PER_LEVEL;
@@ -100,17 +100,16 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 *entryToInsert = HamtNodeEntry(std::move(nodeToInsertAt));
                 entryToInsert = nextEntry;
                 continue;
-            // If there's not, allocate a new node with space for one more
-            // child.
+                // If there's not, allocate a new node with space for one more
+                // child.
             } else {
                 int nChildren = nodeToInsertAt->numberOfChildren() + 1;
 
                 auto leaf = std::make_unique<HamtLeaf>(std::move(str), hash);
 
-                std::unique_ptr<HamtNode> newNode(
-                        new (nChildren) HamtNode(std::move(nodeToInsertAt),
-                                                 HamtNodeEntry(std::move(leaf)),
-                                                 hash));
+                std::unique_ptr<HamtNode> newNode(new (nChildren) HamtNode(
+                    std::move(nodeToInsertAt), HamtNodeEntry(std::move(leaf)),
+                    hash));
 
                 *entryToInsert = HamtNodeEntry(std::move(newNode));
                 return;
@@ -124,18 +123,17 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
                 return;
             }
 
-            if (UNLIKELY(level >= LEVELS_PER_HASH)
-             && (level % LEVELS_PER_HASH) == 0) {
-                otherHash = getNthBackup(otherLeaf->data,
-                                         level / LEVELS_PER_HASH - 1);
+            if (UNLIKELY(level >= LEVELS_PER_HASH) &&
+                (level % LEVELS_PER_HASH) == 0) {
+                otherHash =
+                    getNthBackup(otherLeaf->data, level / LEVELS_PER_HASH - 1);
             } else {
                 otherHash >>= BITS_PER_LEVEL;
             }
             otherLeaf->hash = otherHash;
 
-            std::unique_ptr<HamtNode> newNode(
-                    new (1) HamtNode(otherHash,
-                                     HamtNodeEntry(std::move(otherLeaf))));
+            std::unique_ptr<HamtNode> newNode(new (1) HamtNode(
+                otherHash, HamtNodeEntry(std::move(otherLeaf))));
 
             *entryToInsert = HamtNodeEntry(std::move(newNode));
             hash = lastHash;
@@ -151,7 +149,8 @@ bool TopLevelHamtNode::find(uint64_t hash, const std::string &str) const {
     hash >>= BITS_PER_LEVEL;
     unsigned level = 1;
 
-    if (entry->isNull()) return false;
+    if (entry->isNull())
+        return false;
 
     while (true) {
         if (entry->isLeaf()) {
@@ -169,8 +168,8 @@ bool TopLevelHamtNode::find(uint64_t hash, const std::string &str) const {
             lastHash = hash;
 
             level++;
-            if (UNLIKELY(level >= LEVELS_PER_HASH)
-             && (level % LEVELS_PER_HASH) == 0) {
+            if (UNLIKELY(level >= LEVELS_PER_HASH) &&
+                (level % LEVELS_PER_HASH) == 0) {
                 hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
             } else {
                 hash >>= BITS_PER_LEVEL;
@@ -199,8 +198,8 @@ void deleteFromNode(HamtNodeEntry *entry, uint64_t hash) {
         }
 
         // Otherwise, we'll want to allocate a new, smaller node.
-        std::unique_ptr<HamtNode> newNode(
-                new (nChildren - 1) HamtNode(std::move(node), hash));
+        std::unique_ptr<HamtNode> newNode(new (nChildren - 1)
+                                              HamtNode(std::move(node), hash));
 
         *entry = HamtNodeEntry(std::move(newNode));
     }
@@ -212,14 +211,15 @@ bool TopLevelHamtNode::erase(uint64_t hash, const std::string &str) {
     uint64_t hashToDeleteTo = hash >> 6;
     unsigned level = 0;
 
-    if (entry->isNull()) return false;
+    if (entry->isNull())
+        return false;
 
     while (true) {
         level++;
 
         uint64_t lastHash = hash;
-        if (UNLIKELY(level >= LEVELS_PER_HASH)
-         && (level % LEVELS_PER_HASH) == 0) {
+        if (UNLIKELY(level >= LEVELS_PER_HASH) &&
+            (level % LEVELS_PER_HASH) == 0) {
             hash = getNthBackup(str, level / LEVELS_PER_HASH - 1);
         } else {
             hash >>= BITS_PER_LEVEL;
@@ -246,7 +246,6 @@ bool TopLevelHamtNode::erase(uint64_t hash, const std::string &str) {
             }
 
             entry = &node.children[node.numberOfHashesAbove(hash) - 1];
-
         }
     }
 }
@@ -258,14 +257,14 @@ bool TopLevelHamtNode::erase(uint64_t hash, const std::string &str) {
 HamtNodeEntry::HamtNodeEntry(std::unique_ptr<HamtNode> node)
     : ptr(reinterpret_cast<std::uintptr_t>(node.release())) {}
 
-// Initialize the pointer 
+// Initialize the pointer
 HamtNodeEntry::HamtNodeEntry(std::unique_ptr<HamtLeaf> leaf)
     : ptr(reinterpret_cast<std::uintptr_t>(leaf.release()) | 1) {}
 
 // Initialize the pointer to NULL.
 HamtNodeEntry::HamtNodeEntry() : ptr(0) {}
 
-HamtNodeEntry::HamtNodeEntry(HamtNodeEntry &&other): ptr(other.ptr) {
+HamtNodeEntry::HamtNodeEntry(HamtNodeEntry &&other) : ptr(other.ptr) {
     other.ptr = 0;
 }
 
@@ -276,17 +275,11 @@ HamtNodeEntry &HamtNodeEntry::operator=(HamtNodeEntry &&other) {
     return *this;
 }
 
-void HamtNodeEntry::release() {
-    ptr = 0;
-}
+void HamtNodeEntry::release() { ptr = 0; }
 
-bool HamtNodeEntry::isLeaf() const {
-    return ptr & 1;
-}
+bool HamtNodeEntry::isLeaf() const { return ptr & 1; }
 
-bool HamtNodeEntry::isNull() const {
-    return ptr == 0;
-}
+bool HamtNodeEntry::isNull() const { return ptr == 0; }
 
 std::unique_ptr<HamtNode> HamtNodeEntry::takeChild() {
     assert(!isNull() && !isLeaf());
@@ -335,22 +328,19 @@ HamtNodeEntry::~HamtNodeEntry() {
 // HamtLeaf method definitions.
 //
 
-HamtLeaf::HamtLeaf(std::string data, uint64_t hash)
-    : data(data), hash(hash) {}
+HamtLeaf::HamtLeaf(std::string data, uint64_t hash) : data(data), hash(hash) {}
 
 //////////////////////////////////////////////////////////////////////////////
 // HamtNode method definitions.
 //
 
 HamtNode::HamtNode(uint64_t hash, HamtNodeEntry entry)
-    : map(1ULL << (hash & FIRST_N_BITS))
-{
+    : map(1ULL << (hash & FIRST_N_BITS)) {
     new (&children[0]) HamtNodeEntry(std::move(entry));
 }
 
-HamtNode::HamtNode(uint64_t hash1, HamtNodeEntry entry1,
-                   uint64_t hash2, HamtNodeEntry entry2)
-{
+HamtNode::HamtNode(uint64_t hash1, HamtNodeEntry entry1, uint64_t hash2,
+                   HamtNodeEntry entry2) {
     auto key1 = hash1 & FIRST_N_BITS;
     auto key2 = hash2 & FIRST_N_BITS;
 
@@ -381,9 +371,7 @@ HamtNode::HamtNode(std::unique_ptr<HamtNode> node, uint64_t hash) {
 
     // memcpy and then zero out the bytes before the child we're deleting.
     size_t firstHalfBytes = idx * sizeof(HamtNodeEntry);
-    std::memcpy(&children[0],
-                &node->children[0],
-                firstHalfBytes);
+    std::memcpy(&children[0], &node->children[0], firstHalfBytes);
     std::memset(&node->children[0], 0, firstHalfBytes);
 
     // Delete the actual child we're looking at.
@@ -391,15 +379,11 @@ HamtNode::HamtNode(std::unique_ptr<HamtNode> node, uint64_t hash) {
 
     // memcpy and then zero out the bytes after the child we're deleting.
     size_t sndHalfBytes = (nChildren - idx) * sizeof(HamtNodeEntry);
-    std::memcpy(&children[idx],
-                &node->children[idx + 1],
-                sndHalfBytes);
+    std::memcpy(&children[idx], &node->children[idx + 1], sndHalfBytes);
     std::memset(&node->children[0], 0, sndHalfBytes);
 }
 
-
-HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
-                   HamtNodeEntry entry,
+HamtNode::HamtNode(std::unique_ptr<HamtNode> node, HamtNodeEntry entry,
                    uint64_t hash) {
     uint64_t nChildren = node->numberOfChildren();
     map = node->map;
@@ -407,18 +391,14 @@ HamtNode::HamtNode(std::unique_ptr<HamtNode> node,
     assert(!containsHash(hash));
     size_t idx = numberOfHashesAbove(hash);
     markHash(hash);
-    std::memcpy(&children[0],
-                &node->children[0],
-                idx * sizeof(HamtNodeEntry));
+    std::memcpy(&children[0], &node->children[0], idx * sizeof(HamtNodeEntry));
 
     new (&children[idx]) HamtNodeEntry(std::move(entry));
 
-    std::memcpy(&children[idx + 1],
-                &node->children[idx],
+    std::memcpy(&children[idx + 1], &node->children[idx],
                 (nChildren - idx) * sizeof(HamtNodeEntry));
 
-    std::memset(&node->children[0], 0,
-                sizeof(HamtNodeEntry) * nChildren);
+    std::memset(&node->children[0], 0, sizeof(HamtNodeEntry) * nChildren);
 }
 
 int HamtNode::numberOfChildren() const {
@@ -453,9 +433,7 @@ void *HamtNode::operator new(size_t, int nChildren) {
     return malloc(sizeof(HamtNode) + (nChildren - 1) * sizeof(HamtNodeEntry));
 }
 
-void HamtNode::operator delete(void *p) {
-    free(p);
-}
+void HamtNode::operator delete(void *p) { free(p); }
 
 //////////////////////////////////////////////////////////////////////////////
 // Hamt method definitions.
@@ -480,6 +458,6 @@ bool Hamt::erase(const std::string &str) {
 // warning.
 #ifdef __GNUC__
 #ifndef __clang__
-    #pragma GCC diagnostic warning "-Wclass-memaccess"
+#pragma GCC diagnostic warning "-Wclass-memaccess"
 #endif
 #endif
