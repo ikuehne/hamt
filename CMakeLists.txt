@@ -17,3 +17,6 @@ target_link_libraries(test hamt)
 
 add_executable(bench bench/bench.cpp)
 target_link_libraries(bench hamt)
+
+add_executable(dictionary bench/dictionary.cpp)
+target_link_libraries(dictionary hamt)

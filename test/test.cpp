@@ -67,14 +67,14 @@ void runTest(int size) {
 
     for (const auto &str: stringsToAdd) {
         i++;
-        require(hamt.lookup(str));
+        require(hamt.find(str));
     }
 
     i = 0;
     for (const auto &str: stringsNotToAdd) {
         i++;
-        require(!hamt.lookup(str));
-        require(!hamt.remove(str));
+        require(!hamt.find(str));
+        require(!hamt.erase(str));
     }
 
     i = 0;
@@ -84,7 +84,7 @@ void runTest(int size) {
          str < stringsToAdd.begin() + stringsToAdd.size() / 2;
          str++) {
         i++;
-        require(hamt.remove(*str));
+        require(hamt.erase(*str));
     }
 
     i = 0;
@@ -92,7 +92,7 @@ void runTest(int size) {
          str < stringsToAdd.begin() + stringsToAdd.size() / 2;
          str++) {
         i++;
-        require(!hamt.lookup(*str));
+        require(!hamt.find(*str));
     }
 
     i = 0;
@@ -100,7 +100,7 @@ void runTest(int size) {
          str < stringsToAdd.end();
          str++) {
         i++;
-        require(hamt.lookup(*str));
+        require(hamt.find(*str));
     }
 }
 
@@ -112,7 +112,7 @@ void collision() {
 
     hamt.insert("aaa");
     hamt.insert("aaa");
-    require(hamt.lookup("aaa"));
+    require(hamt.find("aaa"));
 }
 
 int main(void) {

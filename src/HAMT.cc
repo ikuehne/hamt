@@ -145,7 +145,7 @@ void TopLevelHamtNode::insert(uint64_t hash, std::string &&str) {
     }
 }
 
-bool TopLevelHamtNode::lookup(uint64_t hash, const std::string &str) const {
+bool TopLevelHamtNode::find(uint64_t hash, const std::string &str) const {
     const HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
     uint64_t lastHash = hash;
     hash >>= BITS_PER_LEVEL;
@@ -206,7 +206,7 @@ void deleteFromNode(HamtNodeEntry *entry, uint64_t hash) {
     }
 }
 
-bool TopLevelHamtNode::remove(uint64_t hash, const std::string &str) {
+bool TopLevelHamtNode::erase(uint64_t hash, const std::string &str) {
     HamtNodeEntry *entry = &table[hash & FIRST_N_BITS];
     HamtNodeEntry *entryToDeleteTo = entry;
     uint64_t hashToDeleteTo = hash >> 6;
@@ -466,14 +466,14 @@ void Hamt::insert(std::string &&str) {
     root.insert(hash, std::move(str));
 }
 
-bool Hamt::lookup(const std::string &str) const {
+bool Hamt::find(const std::string &str) const {
     uint64_t hash = hasher(str);
-    return root.lookup(hash, str);
+    return root.find(hash, str);
 }
 
-bool Hamt::remove(const std::string &str) {
+bool Hamt::erase(const std::string &str) {
     uint64_t hash = hasher(str);
-    return root.remove(hash, str);
+    return root.erase(hash, str);
 }
 
 // Re-enable the warning we disabled at the start.

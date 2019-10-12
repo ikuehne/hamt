@@ -198,9 +198,9 @@ class TopLevelHamtNode {
 public:
     void insert(uint64_t hash, std::string &&str);
 
-    bool lookup(uint64_t hash, const std::string &str) const;
+    bool find(uint64_t hash, const std::string &str) const;
 
-    bool remove(uint64_t hash, const std::string &str);
+    bool erase(uint64_t hash, const std::string &str);
 
 private:
     HamtNodeEntry table[MAX_IDX];
@@ -216,12 +216,12 @@ public:
     void insert(std::string &&str);
 
     // Lookup a string in the set.
-    bool lookup(const std::string &str) const;
+    bool find(const std::string &str) const;
 
     // Delete a string from the set.
     //
     // Return whether the string was found.
-    bool remove(const std::string &str);
+    bool erase(const std::string &str);
 
 private:
     TopLevelHamtNode root;
